@@ -1370,6 +1370,50 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_versions: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          prompt_type: string
+          tenant_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          prompt_type: string
+          tenant_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          prompt_type?: string
+          tenant_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_versions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       round_robin_state: {
         Row: {
           created_at: string | null
@@ -1678,6 +1722,59 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      tenant_settings: {
+        Row: {
+          brand_name: string | null
+          calendar_provider: string | null
+          created_at: string
+          id: string
+          llm_model: string | null
+          llm_provider: string | null
+          logo_url: string | null
+          primary_color: string | null
+          tenant_name: string
+          timezone: string | null
+          updated_at: string
+          whatsapp_instance_id: string | null
+        }
+        Insert: {
+          brand_name?: string | null
+          calendar_provider?: string | null
+          created_at?: string
+          id?: string
+          llm_model?: string | null
+          llm_provider?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          tenant_name?: string
+          timezone?: string | null
+          updated_at?: string
+          whatsapp_instance_id?: string | null
+        }
+        Update: {
+          brand_name?: string | null
+          calendar_provider?: string | null
+          created_at?: string
+          id?: string
+          llm_model?: string | null
+          llm_provider?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          tenant_name?: string
+          timezone?: string | null
+          updated_at?: string
+          whatsapp_instance_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_settings_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
