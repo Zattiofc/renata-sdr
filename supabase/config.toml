@@ -68,6 +68,3 @@ verify_jwt = false
 
 [functions.validate-contacts]
 verify_jwt = false
-
-[functions.whatsapp-webhook]
-verify_jwt = false
