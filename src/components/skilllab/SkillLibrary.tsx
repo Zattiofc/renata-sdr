@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Search, Plus, Filter, Tag, Target, Zap, CheckCircle2, Clock, Archive, Edit2, Send, Eye, ChevronRight, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+
 import { motion } from 'framer-motion';
 import { useSkills, useNichePacks, usePublishSkill, type Skill } from '@/hooks/useSkills';
 import { SkillEditorModal } from './SkillEditorModal';
