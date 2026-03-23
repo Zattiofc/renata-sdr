@@ -55,7 +55,7 @@ export function useSkills(filters?: { nicho?: string; status?: string }) {
     queryFn: async () => {
       let query = supabase.from('skills').select('*').order('created_at', { ascending: false });
       if (filters?.nicho) query = query.eq('nicho', filters.nicho);
-      if (filters?.status) query = query.eq('status', filters.status);
+      if (filters?.status) query = query.eq('status', filters.status as any);
       const { data, error } = await query;
       if (error) throw error;
       return (data || []) as Skill[];
