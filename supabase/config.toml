@@ -1,1 +1,73 @@
 project_id = "uszefkkajldrakxfrgxl"
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.message-grouper]
+verify_jwt = false
+
+[functions.nina-orchestrator]
+verify_jwt = false
+
+[functions.whatsapp-sender]
+verify_jwt = false
+
+[functions.initialize-system]
+verify_jwt = false
+
+[functions.validate-setup]
+verify_jwt = false
+
+[functions.simulate-webhook]
+verify_jwt = false
+
+[functions.simulate-audio-webhook]
+verify_jwt = false
+
+[functions.test-whatsapp-message]
+verify_jwt = false
+
+[functions.test-elevenlabs-tts]
+verify_jwt = false
+
+[functions.generate-prompt]
+verify_jwt = false
+
+[functions.analyze-conversation]
+verify_jwt = false
+
+[functions.health-check]
+verify_jwt = false
+
+[functions.seed-appointments]
+verify_jwt = false
+
+[functions.trigger-nina-orchestrator]
+verify_jwt = false
+
+[functions.trigger-whatsapp-sender]
+verify_jwt = false
+
+[functions.skill-router]
+verify_jwt = false
+
+[functions.skill-lab-chat]
+verify_jwt = false
+
+[functions.evolution-webhook]
+verify_jwt = false
+
+[functions.check-instances-status]
+verify_jwt = false
+
+[functions.broadcast-processor]
+verify_jwt = false
+
+[functions.validate-whatsapp-numbers]
+verify_jwt = false
+
+[functions.validate-contacts]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
