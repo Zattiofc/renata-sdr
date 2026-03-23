@@ -10,6 +10,7 @@ import Team from './components/Team';
 import Scheduling from './components/Scheduling';
 import Kanban from './components/Kanban';
 import Materials from './components/Materials';
+import SkillLab from './pages/SkillLab';
 
 import Auth from './pages/Auth';
 
@@ -79,6 +80,7 @@ const App: React.FC = () => {
                   <Route path="/materials" element={<Materials />} />
                   <Route path="/scheduling" element={<Scheduling />} />
                   <Route path="/team" element={<Team />} />
+                  <Route path="/skill-lab" element={<SkillLab />} />
                   <Route path="/settings" element={<Settings />} />
                   
                 </Route>
