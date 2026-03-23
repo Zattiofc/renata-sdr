@@ -280,6 +280,8 @@ export type Database = {
           is_blocked: boolean | null
           is_business: boolean | null
           last_activity: string
+          lead_state: Database["public"]["Enums"]["lead_state"] | null
+          lead_state_updated_at: string | null
           linha_negocio: string | null
           name: string | null
           notes: string | null
@@ -308,6 +310,8 @@ export type Database = {
           is_blocked?: boolean | null
           is_business?: boolean | null
           last_activity?: string
+          lead_state?: Database["public"]["Enums"]["lead_state"] | null
+          lead_state_updated_at?: string | null
           linha_negocio?: string | null
           name?: string | null
           notes?: string | null
@@ -336,6 +340,8 @@ export type Database = {
           is_blocked?: boolean | null
           is_business?: boolean | null
           last_activity?: string
+          lead_state?: Database["public"]["Enums"]["lead_state"] | null
+          lead_state_updated_at?: string | null
           linha_negocio?: string | null
           name?: string | null
           notes?: string | null
@@ -751,6 +757,118 @@ export type Database = {
         }
         Relationships: []
       }
+      lab_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          messages: Json | null
+          modo: Database["public"]["Enums"]["lab_mode"]
+          resultado: Json | null
+          skill_id: string | null
+          status: string | null
+          titulo: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          messages?: Json | null
+          modo?: Database["public"]["Enums"]["lab_mode"]
+          resultado?: Json | null
+          skill_id?: string | null
+          status?: string | null
+          titulo?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          messages?: Json | null
+          modo?: Database["public"]["Enums"]["lab_mode"]
+          resultado?: Json | null
+          skill_id?: string | null
+          status?: string | null
+          titulo?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lab_sessions_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_state_history: {
+        Row: {
+          contact_id: string
+          conversation_id: string | null
+          created_at: string
+          estado_anterior: Database["public"]["Enums"]["lead_state"] | null
+          estado_novo: Database["public"]["Enums"]["lead_state"]
+          id: string
+          metadata: Json | null
+          motivo: string | null
+          skill_id: string | null
+        }
+        Insert: {
+          contact_id: string
+          conversation_id?: string | null
+          created_at?: string
+          estado_anterior?: Database["public"]["Enums"]["lead_state"] | null
+          estado_novo: Database["public"]["Enums"]["lead_state"]
+          id?: string
+          metadata?: Json | null
+          motivo?: string | null
+          skill_id?: string | null
+        }
+        Update: {
+          contact_id?: string
+          conversation_id?: string | null
+          created_at?: string
+          estado_anterior?: Database["public"]["Enums"]["lead_state"] | null
+          estado_novo?: Database["public"]["Enums"]["lead_state"]
+          id?: string
+          metadata?: Json | null
+          motivo?: string | null
+          skill_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_state_history_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_state_history_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_state_history_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_state_history_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       material_send_logs: {
         Row: {
           canal: string
@@ -1054,6 +1172,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      niche_packs: {
+        Row: {
+          created_at: string
+          ctas_preferenciais: string[] | null
+          dores_principais: string[] | null
+          icp_persona: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          label: string
+          nome_nicho: string
+          objecoes_comuns: string[] | null
+          perguntas_qualificacao: string[] | null
+          provas_sociais_sugeridas: string[] | null
+          termos_proibidos: string[] | null
+          tom_de_voz: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ctas_preferenciais?: string[] | null
+          dores_principais?: string[] | null
+          icp_persona?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          label: string
+          nome_nicho: string
+          objecoes_comuns?: string[] | null
+          perguntas_qualificacao?: string[] | null
+          provas_sociais_sugeridas?: string[] | null
+          termos_proibidos?: string[] | null
+          tom_de_voz?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ctas_preferenciais?: string[] | null
+          dores_principais?: string[] | null
+          icp_persona?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          label?: string
+          nome_nicho?: string
+          objecoes_comuns?: string[] | null
+          perguntas_qualificacao?: string[] | null
+          provas_sociais_sugeridas?: string[] | null
+          termos_proibidos?: string[] | null
+          tom_de_voz?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       nina_processing_queue: {
         Row: {
@@ -1533,6 +1705,399 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      skill_approvals: {
+        Row: {
+          comentarios: string | null
+          created_at: string
+          id: string
+          revisado_em: string | null
+          revisado_por: string | null
+          skill_id: string
+          solicitado_em: string | null
+          solicitado_por: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          comentarios?: string | null
+          created_at?: string
+          id?: string
+          revisado_em?: string | null
+          revisado_por?: string | null
+          skill_id: string
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          comentarios?: string | null
+          created_at?: string
+          id?: string
+          revisado_em?: string | null
+          revisado_por?: string | null
+          skill_id?: string
+          solicitado_em?: string | null
+          solicitado_por?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_approvals_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_events: {
+        Row: {
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          lead_state: Database["public"]["Enums"]["lead_state"] | null
+          nicho: string | null
+          payload: Json | null
+          skill_id: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          lead_state?: Database["public"]["Enums"]["lead_state"] | null
+          nicho?: string | null
+          payload?: Json | null
+          skill_id?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          lead_state?: Database["public"]["Enums"]["lead_state"] | null
+          nicho?: string | null
+          payload?: Json | null
+          skill_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_events_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_events_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_experiments: {
+        Row: {
+          concluido_em: string | null
+          created_at: string
+          criado_por: string | null
+          id: string
+          iniciado_em: string | null
+          janela_minima_dias: number | null
+          lead_state: Database["public"]["Enums"]["lead_state"] | null
+          metricas: Json | null
+          nicho: string | null
+          nome: string
+          skill_id_a: string | null
+          skill_id_b: string | null
+          status: string | null
+          updated_at: string
+          variante_vencedora: string | null
+        }
+        Insert: {
+          concluido_em?: string | null
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          iniciado_em?: string | null
+          janela_minima_dias?: number | null
+          lead_state?: Database["public"]["Enums"]["lead_state"] | null
+          metricas?: Json | null
+          nicho?: string | null
+          nome: string
+          skill_id_a?: string | null
+          skill_id_b?: string | null
+          status?: string | null
+          updated_at?: string
+          variante_vencedora?: string | null
+        }
+        Update: {
+          concluido_em?: string | null
+          created_at?: string
+          criado_por?: string | null
+          id?: string
+          iniciado_em?: string | null
+          janela_minima_dias?: number | null
+          lead_state?: Database["public"]["Enums"]["lead_state"] | null
+          metricas?: Json | null
+          nicho?: string | null
+          nome?: string
+          skill_id_a?: string | null
+          skill_id_b?: string | null
+          status?: string | null
+          updated_at?: string
+          variante_vencedora?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_experiments_skill_id_a_fkey"
+            columns: ["skill_id_a"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_experiments_skill_id_b_fkey"
+            columns: ["skill_id_b"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_router_logs: {
+        Row: {
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string
+          estado_lead: Database["public"]["Enums"]["lead_state"] | null
+          fallback_ativado: boolean | null
+          id: string
+          intencao_detectada: string | null
+          message_id: string | null
+          motivo_escolha: string | null
+          nicho: string | null
+          score_confianca: number | null
+          skill_executada: boolean | null
+          skill_id: string | null
+          skill_nome: string | null
+          tempo_resposta_ms: number | null
+        }
+        Insert: {
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          estado_lead?: Database["public"]["Enums"]["lead_state"] | null
+          fallback_ativado?: boolean | null
+          id?: string
+          intencao_detectada?: string | null
+          message_id?: string | null
+          motivo_escolha?: string | null
+          nicho?: string | null
+          score_confianca?: number | null
+          skill_executada?: boolean | null
+          skill_id?: string | null
+          skill_nome?: string | null
+          tempo_resposta_ms?: number | null
+        }
+        Update: {
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          estado_lead?: Database["public"]["Enums"]["lead_state"] | null
+          fallback_ativado?: boolean | null
+          id?: string
+          intencao_detectada?: string | null
+          message_id?: string | null
+          motivo_escolha?: string | null
+          nicho?: string | null
+          score_confianca?: number | null
+          skill_executada?: boolean | null
+          skill_id?: string | null
+          skill_nome?: string | null
+          tempo_resposta_ms?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_router_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_router_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_router_logs_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_router_logs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_router_logs_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_versions: {
+        Row: {
+          created_at: string
+          id: string
+          is_rollback_target: boolean | null
+          notas_publicacao: string | null
+          publicado_em: string | null
+          publicado_por: string | null
+          skill_id: string
+          snapshot: Json
+          versao: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_rollback_target?: boolean | null
+          notas_publicacao?: string | null
+          publicado_em?: string | null
+          publicado_por?: string | null
+          skill_id: string
+          snapshot: Json
+          versao: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_rollback_target?: boolean | null
+          notas_publicacao?: string | null
+          publicado_em?: string | null
+          publicado_por?: string | null
+          skill_id?: string
+          snapshot?: Json
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_versions_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skills: {
+        Row: {
+          autor_id: string | null
+          autor_nome: string | null
+          changelog: Json | null
+          created_at: string
+          ctas_permitidos: string[] | null
+          descricao: string | null
+          fluxo: Json | null
+          guardrails: string[] | null
+          id: string
+          is_core: boolean
+          lead_states_aplicaveis:
+            | Database["public"]["Enums"]["lead_state"][]
+            | null
+          nicho: string
+          nome: string
+          objetivo: string | null
+          respostas_base: Json | null
+          score_base: number | null
+          status: Database["public"]["Enums"]["skill_status"]
+          tags: string[] | null
+          triggers: string[] | null
+          updated_at: string
+          versao: number
+        }
+        Insert: {
+          autor_id?: string | null
+          autor_nome?: string | null
+          changelog?: Json | null
+          created_at?: string
+          ctas_permitidos?: string[] | null
+          descricao?: string | null
+          fluxo?: Json | null
+          guardrails?: string[] | null
+          id?: string
+          is_core?: boolean
+          lead_states_aplicaveis?:
+            | Database["public"]["Enums"]["lead_state"][]
+            | null
+          nicho?: string
+          nome: string
+          objetivo?: string | null
+          respostas_base?: Json | null
+          score_base?: number | null
+          status?: Database["public"]["Enums"]["skill_status"]
+          tags?: string[] | null
+          triggers?: string[] | null
+          updated_at?: string
+          versao?: number
+        }
+        Update: {
+          autor_id?: string | null
+          autor_nome?: string | null
+          changelog?: Json | null
+          created_at?: string
+          ctas_permitidos?: string[] | null
+          descricao?: string | null
+          fluxo?: Json | null
+          guardrails?: string[] | null
+          id?: string
+          is_core?: boolean
+          lead_states_aplicaveis?:
+            | Database["public"]["Enums"]["lead_state"][]
+            | null
+          nicho?: string
+          nome?: string
+          objetivo?: string | null
+          respostas_base?: Json | null
+          score_base?: number | null
+          status?: Database["public"]["Enums"]["skill_status"]
+          tags?: string[] | null
+          triggers?: string[] | null
+          updated_at?: string
+          versao?: number
+        }
+        Relationships: []
       }
       system_settings: {
         Row: {
@@ -2087,12 +2652,28 @@ export type Database = {
       app_role: "admin" | "user"
       appointment_type: "demo" | "meeting" | "support" | "followup"
       conversation_status: "nina" | "human" | "paused"
+      lab_mode: "train" | "create" | "improve" | "simulate"
+      lead_state:
+        | "NEW_LEAD"
+        | "DISCOVERY"
+        | "QUALIFIED"
+        | "OBJECTION"
+        | "READY_TO_BOOK"
+        | "BOOKED"
+        | "FOLLOWUP"
+        | "HANDOFF_HUMAN"
       member_role: "admin" | "manager" | "agent"
       member_status: "active" | "invited" | "disabled"
       message_from: "user" | "nina" | "human"
       message_status: "sent" | "delivered" | "read" | "failed" | "processing"
       message_type: "text" | "audio" | "image" | "document" | "video"
       queue_status: "pending" | "processing" | "completed" | "failed"
+      skill_status:
+        | "draft"
+        | "in_review"
+        | "approved"
+        | "published"
+        | "archived"
       team_assignment: "mateus" | "igor" | "fe" | "vendas" | "suporte"
       whatsapp_instance_status:
         | "connected"
@@ -2233,12 +2814,24 @@ export const Constants = {
       app_role: ["admin", "user"],
       appointment_type: ["demo", "meeting", "support", "followup"],
       conversation_status: ["nina", "human", "paused"],
+      lab_mode: ["train", "create", "improve", "simulate"],
+      lead_state: [
+        "NEW_LEAD",
+        "DISCOVERY",
+        "QUALIFIED",
+        "OBJECTION",
+        "READY_TO_BOOK",
+        "BOOKED",
+        "FOLLOWUP",
+        "HANDOFF_HUMAN",
+      ],
       member_role: ["admin", "manager", "agent"],
       member_status: ["active", "invited", "disabled"],
       message_from: ["user", "nina", "human"],
       message_status: ["sent", "delivered", "read", "failed", "processing"],
       message_type: ["text", "audio", "image", "document", "video"],
       queue_status: ["pending", "processing", "completed", "failed"],
+      skill_status: ["draft", "in_review", "approved", "published", "archived"],
       team_assignment: ["mateus", "igor", "fe", "vendas", "suporte"],
       whatsapp_instance_status: [
         "connected",
