@@ -685,31 +685,43 @@ export type Database = {
       }
       knowledge_chunks: {
         Row: {
+          category: string | null
           chunk_index: number
           content: string
           created_at: string
+          effectiveness_score: number | null
           embedding: string | null
           file_id: string
           id: string
+          last_used_at: string | null
           metadata: Json | null
+          usage_count: number | null
         }
         Insert: {
+          category?: string | null
           chunk_index?: number
           content: string
           created_at?: string
+          effectiveness_score?: number | null
           embedding?: string | null
           file_id: string
           id?: string
+          last_used_at?: string | null
           metadata?: Json | null
+          usage_count?: number | null
         }
         Update: {
+          category?: string | null
           chunk_index?: number
           content?: string
           created_at?: string
+          effectiveness_score?: number | null
           embedding?: string | null
           file_id?: string
           id?: string
+          last_used_at?: string | null
           metadata?: Json | null
+          usage_count?: number | null
         }
         Relationships: [
           {
@@ -723,6 +735,7 @@ export type Database = {
       }
       knowledge_files: {
         Row: {
+          category: string | null
           chunk_count: number
           created_at: string
           error_message: string | null
@@ -734,6 +747,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           chunk_count?: number
           created_at?: string
           error_message?: string | null
@@ -745,6 +759,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           chunk_count?: number
           created_at?: string
           error_message?: string | null
@@ -756,6 +771,79 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      knowledge_suggestions: {
+        Row: {
+          applied_at: string | null
+          category: string
+          confidence: number | null
+          content: string
+          created_at: string
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_contact_id: string | null
+          source_conversation_id: string | null
+          source_type: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          category?: string
+          confidence?: number | null
+          content: string
+          created_at?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_contact_id?: string | null
+          source_conversation_id?: string | null
+          source_type?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          category?: string
+          confidence?: number | null
+          content?: string
+          created_at?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_contact_id?: string | null
+          source_conversation_id?: string | null
+          source_type?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_suggestions_source_contact_id_fkey"
+            columns: ["source_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_suggestions_source_contact_id_fkey"
+            columns: ["source_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_suggestions_source_conversation_id_fkey"
+            columns: ["source_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lab_sessions: {
         Row: {
@@ -1582,6 +1670,67 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenant_settings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rag_feedback: {
+        Row: {
+          chunks_similarity: number[] | null
+          chunks_used: string[] | null
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string
+          gap_description: string | null
+          id: string
+          knowledge_gap_detected: boolean | null
+          query_text: string
+          response_quality: string | null
+        }
+        Insert: {
+          chunks_similarity?: number[] | null
+          chunks_used?: string[] | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          gap_description?: string | null
+          id?: string
+          knowledge_gap_detected?: boolean | null
+          query_text: string
+          response_quality?: string | null
+        }
+        Update: {
+          chunks_similarity?: number[] | null
+          chunks_used?: string[] | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          gap_description?: string | null
+          id?: string
+          knowledge_gap_detected?: boolean | null
+          query_text?: string
+          response_quality?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rag_feedback_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rag_feedback_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rag_feedback_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -2618,6 +2767,27 @@ export type Database = {
           metadata: Json
           similarity: number
         }[]
+      }
+      match_knowledge_chunks_enhanced: {
+        Args: {
+          filter_category?: string
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          chunk_index: number
+          content: string
+          file_id: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
+      track_chunk_usage: {
+        Args: { chunk_ids: string[]; quality?: string }
+        Returns: undefined
       }
       update_client_memory: {
         Args: { p_contact_id: string; p_new_memory: Json }
