@@ -1259,40 +1259,79 @@ async function processQueueItem(
   // Process template variables ({{ data_hora }}, {{ dia_semana }}, etc.)
   const processedPrompt = processPromptTemplate(enhancedSystemPrompt, conversation.contact);
 
-  // === RAG: Knowledge Base Context Injection ===
+  // === ENHANCED RAG: Context-Aware Knowledge Injection ===
   let finalPrompt = processedPrompt;
+  let ragChunkIds: string[] = [];
+  let ragSimilarities: number[] = [];
   try {
     const userMessageContent = message.content || '';
     if (userMessageContent.trim()) {
+      // Build enriched query: combine user message with conversation context for better retrieval
+      const lastMessages = (recentMessages || []).slice(0, 5).reverse()
+        .map((m: any) => m.content || '').filter((c: string) => c.length > 5);
+      const conversationContext = lastMessages.join(' ').substring(0, 300);
+      const enrichedQuery = `${userMessageContent} ${conversationContext}`.trim();
+
       const ragSession = new Supabase.ai.Session("gte-small");
-      const queryEmbedding = await ragSession.run(userMessageContent, { mean_pool: true, normalize: true });
+      const queryEmbedding = await ragSession.run(enrichedQuery, { mean_pool: true, normalize: true });
       const queryArray = Array.from(queryEmbedding as Float32Array);
 
+      // Adaptive threshold: lower for longer conversations (more context available)
+      const msgCount = conversationHistory.length;
+      const adaptiveThreshold = msgCount > 10 ? 0.55 : msgCount > 5 ? 0.60 : 0.65;
+
       const { data: knowledgeChunks, error: ragError } = await supabase
-        .rpc('match_knowledge_chunks', {
+        .rpc('match_knowledge_chunks_enhanced', {
           query_embedding: queryArray,
-          match_threshold: 0.7,
-          match_count: 5
+          match_threshold: adaptiveThreshold,
+          match_count: 8,
+          filter_category: null
         });
 
       if (!ragError && knowledgeChunks && knowledgeChunks.length > 0) {
-        const knowledgeContext = knowledgeChunks
-          .map((chunk: any) => chunk.content)
+        // Re-rank: boost chunks with higher effectiveness scores and prioritize by category relevance
+        const reranked = knowledgeChunks
+          .map((chunk: any) => ({
+            ...chunk,
+            final_score: chunk.similarity + (chunk.effectiveness_score || 0) * 0.15
+          }))
+          .sort((a: any, b: any) => b.final_score - a.final_score)
+          .slice(0, 5);
+
+        ragChunkIds = reranked.map((c: any) => c.id);
+        ragSimilarities = reranked.map((c: any) => c.similarity);
+
+        const knowledgeContext = reranked
+          .map((chunk: any) => {
+            const catLabel = chunk.category && chunk.category !== 'geral' ? `[${chunk.category.toUpperCase()}] ` : '';
+            return `${catLabel}${chunk.content}`;
+          })
           .join('\n---\n');
         
         finalPrompt += `\n\n<knowledge_context>
-Use as informações abaixo APENAS se relevantes para a pergunta do cliente. Não mencione que consultou uma base de dados.
+INSTRUÇÕES DE USO DO CONTEXTO:
+- Use estas informações APENAS se relevantes para a pergunta do cliente.
+- Não mencione que consultou uma base de dados.
+- Se a informação contradizer algo que o cliente disse, priorize o que o cliente falou.
+- Se a resposta exigir informações que NÃO estão aqui, seja transparente: "Vou confirmar essa informação e te retorno."
+- NUNCA invente dados, preços ou prazos que não estejam explicitamente aqui.
+
 ${knowledgeContext}
 </knowledge_context>`;
         
-        console.log(`[Nina] RAG: Injected ${knowledgeChunks.length} knowledge chunks (similarities: ${knowledgeChunks.map((c: any) => c.similarity.toFixed(2)).join(', ')})`);
+        console.log(`[Nina] RAG Enhanced: Injected ${reranked.length}/${knowledgeChunks.length} chunks (threshold: ${adaptiveThreshold}, scores: ${reranked.map((c: any) => c.final_score.toFixed(2)).join(', ')})`);
+
+        // Track chunk usage asynchronously
+        supabase.rpc('track_chunk_usage', { chunk_ids: ragChunkIds, quality: 'neutral' })
+          .then(() => console.log('[Nina] RAG chunk usage tracked'))
+          .catch((e: any) => console.error('[Nina] RAG tracking error:', e));
+
       } else {
-        console.log('[Nina] RAG: No relevant knowledge chunks found');
+        console.log(`[Nina] RAG: No relevant chunks found (threshold: ${adaptiveThreshold})`);
       }
     }
   } catch (ragError) {
     console.error('[Nina] RAG error (non-fatal):', ragError);
-    // Continue without RAG context - don't break the response
   }
 
   // Debug: Log current date/time being used in prompt
