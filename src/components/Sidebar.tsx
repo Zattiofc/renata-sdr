@@ -17,7 +17,6 @@ const menuItems = [
   { id: 'materials', label: 'Materiais', icon: FileText },
   { id: 'scheduling', label: 'Agendamentos', icon: Calendar },
   { id: 'team', label: 'Equipe', icon: ShieldCheck },
-  { id: 'skill-lab', label: 'Skill Lab', icon: FlaskConical },
   { id: 'settings', label: 'Configurações', icon: SettingsIcon },
 ];
 

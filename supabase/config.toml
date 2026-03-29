@@ -48,12 +48,6 @@ verify_jwt = false
 [functions.trigger-whatsapp-sender]
 verify_jwt = false
 
-[functions.skill-router]
-verify_jwt = false
-
-[functions.skill-lab-chat]
-verify_jwt = false
-
 [functions.evolution-webhook]
 verify_jwt = false
 

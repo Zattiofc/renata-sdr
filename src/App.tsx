@@ -78,7 +78,6 @@ const App: React.FC = () => {
                   <Route path="/materials" element={<Materials />} />
                   <Route path="/scheduling" element={<Scheduling />} />
                   <Route path="/team" element={<Team />} />
-                  <Route path="/skill-lab" element={<SkillLab />} />
                   <Route path="/settings" element={<Settings />} />
                   
                 </Route>
