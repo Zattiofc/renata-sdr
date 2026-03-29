@@ -17,15 +17,33 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { contact_id, conversation_id, user_message, ai_response, current_memory, user_id } = await req.json();
+    const { contact_id, conversation_id, user_message, ai_response, current_memory, user_id, rag_feedback } = await req.json();
 
     console.log(`[Analyze Conversation] Starting analysis for contact ${contact_id}`);
 
     const interactionCount = (current_memory.interaction_summary?.total_conversations || 0) + 1;
-    // Full analysis every 3 interactions (was 5) for better data capture
+    // Full analysis every 3 interactions for better data capture
     const shouldAnalyze = interactionCount === 1 || interactionCount % 3 === 0;
     
     console.log(`[Analyze] Interaction #${interactionCount}, full analysis: ${shouldAnalyze}`);
+
+    // === RAG FEEDBACK TRACKING (always, even on basic updates) ===
+    if (rag_feedback && conversation_id) {
+      try {
+        await supabase.from('rag_feedback').insert({
+          conversation_id,
+          contact_id,
+          query_text: (user_message || '').substring(0, 500),
+          chunks_used: rag_feedback.chunks_used || [],
+          chunks_similarity: rag_feedback.chunks_similarity || [],
+          knowledge_gap_detected: !rag_feedback.had_rag_context && (user_message || '').length > 20,
+          gap_description: !rag_feedback.had_rag_context ? `Sem contexto RAG para: "${(user_message || '').substring(0, 200)}"` : null
+        });
+        console.log('[Analyze] RAG feedback tracked');
+      } catch (ragFbErr) {
+        console.error('[Analyze] RAG feedback tracking error (non-fatal):', ragFbErr);
+      }
+    }
 
     if (!shouldAnalyze) {
       // === BASIC UPDATE: Still extract obvious profile data from messages ===
@@ -130,6 +148,11 @@ serve(async (req) => {
       ? stages.map(s => `- ${s.title} (ID: ${s.id}): ${s.ai_trigger_criteria}`).join('\n')
       : '';
 
+    // Include RAG feedback context for self-improvement analysis
+    const ragContext = rag_feedback?.had_rag_context
+      ? `RAG ativo: ${rag_feedback.chunks_used?.length || 0} chunks usados (similaridade: ${(rag_feedback.chunks_similarity || []).map((s: number) => s.toFixed(2)).join(', ')})`
+      : 'RAG inativo: Nenhum chunk relevante encontrado para esta pergunta';
+
     const conversationSnippet = `
 MENSAGEM DO CLIENTE:
 ${user_message}
@@ -141,6 +164,7 @@ CONTEXTO ATUAL:
 - Interesses conhecidos: ${current_memory.lead_profile?.interests?.join(', ') || 'Nenhum'}
 - Dores identificadas: ${current_memory.sales_intelligence?.pain_points?.join(', ') || 'Nenhuma'}
 - Score atual: ${current_memory.lead_profile?.qualification_score || 0}/100
+- ${ragContext}
 ${hasAiManagedStages ? `
 CRITÉRIOS DOS ESTÁGIOS DO PIPELINE:
 ${stagesCriteria}
@@ -164,12 +188,12 @@ ESTÁGIO ATUAL DO DEAL: ${currentDeal?.stage || 'Sem estágio'}` : ''}
               next_best_action: { type: "string", enum: ["qualify", "demo", "followup", "close", "nurture"] },
               budget_indication: { type: "string", enum: ["unknown", "low", "medium", "high"] },
               decision_timeline: { type: "string", enum: ["unknown", "immediate", "1month", "3months", "6months+"] },
-              resumo_vivo: { type: "string", description: "Resumo factual de 5-10 linhas do estado atual do lead: contexto, dor principal, etapa do funil, pendências, próxima ação. Sem inferências não confirmadas." },
+              resumo_vivo: { type: "string", description: "Resumo factual de 5-10 linhas do estado atual do lead" },
               empresa: { type: "string", description: "Nome da empresa do lead se mencionado" },
               cargo: { type: "string", description: "Cargo do lead se mencionado" },
               cidade: { type: "string", description: "Cidade do lead se mencionada" },
               estado: { type: "string", description: "Estado (UF) do lead se mencionado" },
-              linha_negocio: { type: "string", description: "Linha de negócio de interesse: humano, veterinario, servicos, hexai" },
+              linha_negocio: { type: "string", description: "Linha de negócio de interesse" },
               eventos: { 
                 type: "array", 
                 items: { 
@@ -180,7 +204,7 @@ ESTÁGIO ATUAL DO DEAL: ${currentDeal?.stage || 'Sem estágio'}` : ''}
                   },
                   required: ["tipo", "descricao"]
                 },
-                description: "Eventos importantes detectados nesta interação (max 3). Use 'guardrail' para fora de escopo, 'fora_escopo' para assuntos não relacionados, 'spam' para propaganda, 'agressao' para conduta ofensiva."
+                description: "Eventos importantes detectados nesta interação (max 3)"
               },
               intent_classification: {
                 type: "object",
@@ -189,10 +213,34 @@ ESTÁGIO ATUAL DO DEAL: ${currentDeal?.stage || 'Sem estágio'}` : ''}
                   subtipo: { type: "string" },
                   acao_tomada: { type: "string", enum: ["seguir", "redirecionar", "encerrar", "escalar_humano"] }
                 },
-                description: "Classificação de intenção da interação. Preencha se detectar assunto fora do escopo."
+                description: "Classificação de intenção da interação"
+              },
+              response_quality: {
+                type: "string",
+                enum: ["excellent", "good", "adequate", "poor", "off_topic"],
+                description: "Qualidade da resposta do assistente: excellent (resposta perfeita), good (boa mas poderia melhorar), adequate (aceitável), poor (ruim/genérica), off_topic (fora do contexto)"
+              },
+              knowledge_gap: {
+                type: "object",
+                properties: {
+                  detected: { type: "boolean", description: "Se foi detectada falta de informação na base de conhecimento" },
+                  topic: { type: "string", description: "Tópico que faltou informação" },
+                  suggested_content: { type: "string", description: "Conteúdo sugerido para adicionar à base (máx 500 chars)" },
+                  category: { type: "string", enum: ["produto_servico", "oferta_precos", "faq", "politicas", "provas_sociais", "scripts_vendas", "compliance", "geral"] }
+                },
+                description: "Lacuna de conhecimento detectada - quando a IA não tinha informação suficiente para responder bem"
+              },
+              successful_pattern: {
+                type: "object",
+                properties: {
+                  detected: { type: "boolean", description: "Se a resposta representou um padrão de sucesso replicável" },
+                  pattern_type: { type: "string", enum: ["objection_handling", "qualification", "closing", "rapport", "reactivation"] },
+                  description: { type: "string", description: "Descrição do padrão de sucesso para aprendizado" }
+                },
+                description: "Padrão de sucesso detectado - quando a resposta da IA foi especialmente eficaz"
               }
             },
-            required: ["interests", "pain_points", "qualification_score", "next_best_action", "budget_indication", "decision_timeline", "resumo_vivo"],
+            required: ["interests", "pain_points", "qualification_score", "next_best_action", "budget_indication", "decision_timeline", "resumo_vivo", "response_quality"],
             additionalProperties: false
           }
         }
@@ -219,15 +267,23 @@ ESTÁGIO ATUAL DO DEAL: ${currentDeal?.stage || 'Sem estágio'}` : ''}
       });
     }
 
-    const systemPrompt = hasAiManagedStages 
-      ? `Você é um analista de conversas de vendas. Analise a interação e:
+    const systemPrompt = `Você é um analista de conversas de vendas e especialista em auto-aprimoramento de IA.
+Analise a interação e:
 1. Extraia insights estruturados para atualizar a memória do cliente
-2. Determine para qual estágio do pipeline o deal deve ir
+2. ${hasAiManagedStages ? 'Determine para qual estágio do pipeline o deal deve ir' : 'Avalie o progresso do lead'}
 3. Gere um resumo_vivo factual de 5-10 linhas do estado atual do lead
 4. Detecte eventos importantes (qualificação, objeção, interesse, etc.)
-5. Extraia dados de perfil do lead se mencionados (empresa, cargo, cidade, estado, linha de negócio)`
-      : `Você é um analista de conversas de vendas. Extraia insights estruturados da interação.
-Gere um resumo_vivo factual de 5-10 linhas. Detecte eventos importantes e dados de perfil do lead.`;
+5. Extraia dados de perfil do lead se mencionados (empresa, cargo, cidade, estado, linha de negócio)
+6. AVALIE A QUALIDADE da resposta do assistente: foi precisa, contextual, empática? Ou genérica, fora de tom, incompleta?
+7. DETECTE LACUNAS DE CONHECIMENTO: O assistente teve informações suficientes para responder? Se não, sugira o conteúdo que deveria existir na base.
+8. DETECTE PADRÕES DE SUCESSO: Se a resposta foi especialmente eficaz (tratou objeção, qualificou bem, fechou agendamento), registre o padrão para replicação.
+
+CRITÉRIO DE QUALIDADE:
+- excellent: Resposta perfeita, personalizada, com CTA claro e informação precisa
+- good: Boa resposta mas poderia ser mais específica ou empática
+- adequate: Resposta aceitável mas genérica
+- poor: Resposta ruim, genérica, sem contexto ou repetitiva
+- off_topic: Resposta fora do contexto da conversa`;
 
     const analysisResponse = await callAI(aiConfig, {
       messages: [
@@ -301,7 +357,8 @@ Gere um resumo_vivo factual de 5-10 linhas. Detecte eventos importantes e dados 
             ai_action: ai_response?.substring(0, 200),
             insights_extracted: {
               qualification_score: insights.qualification_score,
-              next_action: insights.next_best_action
+              next_action: insights.next_best_action,
+              response_quality: insights.response_quality
             }
           }
         ]
@@ -354,11 +411,100 @@ Gere um resumo_vivo factual de 5-10 linhas. Detecte eventos importantes e dados 
             descricao: `Análise pós-conversa detectou intenção ${insights.intent_classification.categoria}`
           }
         };
-        const { error: intentError } = await supabase.from('memory_events').insert(intentEvent);
-        if (intentError) {
-          console.error('[Analyze] Error logging intent classification:', intentError);
-        } else {
-          console.log(`[Analyze] Logged intent classification: ${insights.intent_classification.categoria}`);
+        await supabase.from('memory_events').insert(intentEvent);
+        console.log(`[Analyze] Logged intent classification: ${insights.intent_classification.categoria}`);
+      }
+
+      // === SELF-IMPROVEMENT: Track RAG quality and update chunk effectiveness ===
+      if (rag_feedback?.chunks_used?.length > 0 && insights.response_quality) {
+        const qualityMap: Record<string, string> = {
+          'excellent': 'good', 'good': 'good', 'adequate': 'neutral', 'poor': 'bad', 'off_topic': 'bad'
+        };
+        const quality = qualityMap[insights.response_quality] || 'neutral';
+        
+        try {
+          await supabase.rpc('track_chunk_usage', {
+            chunk_ids: rag_feedback.chunks_used,
+            quality
+          });
+          console.log(`[Analyze] Updated RAG chunk effectiveness: ${quality} for ${rag_feedback.chunks_used.length} chunks`);
+        } catch (trackErr) {
+          console.error('[Analyze] Error tracking chunk effectiveness:', trackErr);
+        }
+
+        // Update rag_feedback record with quality
+        if (conversation_id) {
+          await supabase.from('rag_feedback')
+            .update({ response_quality: insights.response_quality })
+            .eq('conversation_id', conversation_id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+        }
+      }
+
+      // === SELF-IMPROVEMENT: Auto-generate knowledge suggestions ===
+      if (insights.knowledge_gap?.detected && insights.knowledge_gap.suggested_content) {
+        try {
+          await supabase.from('knowledge_suggestions').insert({
+            source_type: 'gap_detection',
+            source_conversation_id: conversation_id || null,
+            source_contact_id: contact_id,
+            category: insights.knowledge_gap.category || 'geral',
+            title: insights.knowledge_gap.topic || 'Lacuna detectada',
+            content: insights.knowledge_gap.suggested_content,
+            confidence: 0.7,
+            status: 'pending'
+          });
+          console.log(`[Analyze] Knowledge gap suggestion created: ${insights.knowledge_gap.topic}`);
+        } catch (gapErr) {
+          console.error('[Analyze] Error creating knowledge suggestion:', gapErr);
+        }
+      }
+
+      // === SELF-IMPROVEMENT: Capture successful patterns as knowledge ===
+      if (insights.successful_pattern?.detected && insights.successful_pattern.description) {
+        try {
+          await supabase.from('knowledge_suggestions').insert({
+            source_type: 'success_pattern',
+            source_conversation_id: conversation_id || null,
+            source_contact_id: contact_id,
+            category: 'scripts_vendas',
+            title: `Padrão de sucesso: ${insights.successful_pattern.pattern_type}`,
+            content: `${insights.successful_pattern.description}\n\nPergunta do lead: ${(user_message || '').substring(0, 200)}\nResposta eficaz: ${(ai_response || '').substring(0, 300)}`,
+            confidence: 0.8,
+            status: 'pending'
+          });
+          console.log(`[Analyze] Success pattern captured: ${insights.successful_pattern.pattern_type}`);
+        } catch (patternErr) {
+          console.error('[Analyze] Error capturing success pattern:', patternErr);
+        }
+      }
+
+      // === SELF-IMPROVEMENT: Detect consistently poor responses and escalate ===
+      if (insights.response_quality === 'poor' || insights.response_quality === 'off_topic') {
+        // Check recent rag_feedback for patterns of poor quality
+        const { data: recentFeedback } = await supabase
+          .from('rag_feedback')
+          .select('response_quality, knowledge_gap_detected')
+          .eq('contact_id', contact_id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const poorCount = (recentFeedback || []).filter(f => f.response_quality === 'poor' || f.response_quality === 'off_topic').length;
+        
+        if (poorCount >= 3) {
+          // Create high-priority suggestion for knowledge base review
+          await supabase.from('knowledge_suggestions').insert({
+            source_type: 'quality_alert',
+            source_conversation_id: conversation_id || null,
+            source_contact_id: contact_id,
+            category: 'geral',
+            title: `⚠️ Qualidade baixa recorrente - revisão necessária`,
+            content: `O assistente teve ${poorCount} respostas de baixa qualidade nas últimas interações com este contato. Possível falta de informações na base de conhecimento ou prompt inadequado. Última pergunta sem resposta adequada: "${(user_message || '').substring(0, 300)}"`,
+            confidence: 0.9,
+            status: 'pending'
+          });
+          console.log(`[Analyze] Quality alert created: ${poorCount} poor responses for contact ${contact_id}`);
         }
       }
     }
@@ -375,7 +521,17 @@ Gere um resumo_vivo factual de 5-10 linhas. Detecte eventos importantes e dados 
       }
     }
 
-    return new Response(JSON.stringify({ updated: true, type: 'full', insights, stage_result: stageResult, deal_moved: dealMoved }), {
+    return new Response(JSON.stringify({ 
+      updated: true, 
+      type: 'full', 
+      insights: {
+        response_quality: insights?.response_quality,
+        knowledge_gap: insights?.knowledge_gap?.detected || false,
+        successful_pattern: insights?.successful_pattern?.detected || false
+      }, 
+      stage_result: stageResult, 
+      deal_moved: dealMoved 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
