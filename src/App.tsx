@@ -10,8 +10,6 @@ import Team from './components/Team';
 import Scheduling from './components/Scheduling';
 import Kanban from './components/Kanban';
 import Materials from './components/Materials';
-import SkillLab from './pages/SkillLab';
-
 import Auth from './pages/Auth';
 
 import SetPassword from './pages/SetPassword';
