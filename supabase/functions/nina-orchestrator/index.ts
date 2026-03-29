@@ -1708,7 +1708,7 @@ ${knowledgeContext}
     console.error('[Nina] Failed to trigger whatsapp-sender:', err);
   }
 
-  // Trigger analyze-conversation
+  // Trigger analyze-conversation with RAG feedback
   fetch(`${supabaseUrl}/functions/v1/analyze-conversation`, {
     method: 'POST',
     headers: {
@@ -1720,7 +1720,12 @@ ${knowledgeContext}
       conversation_id: conversation.id,
       user_message: message.content,
       ai_response: aiContent,
-      current_memory: clientMemory
+      current_memory: clientMemory,
+      rag_feedback: {
+        chunks_used: ragChunkIds,
+        chunks_similarity: ragSimilarities,
+        had_rag_context: ragChunkIds.length > 0
+      }
     })
   }).catch(err => console.error('[Nina] Error triggering analyze-conversation:', err));
 }
