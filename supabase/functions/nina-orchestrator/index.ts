@@ -213,6 +213,54 @@ const updateDealStageTool = {
   }
 };
 
+// Tool definition for checking inventory
+const checkInventoryTool = {
+  type: "function",
+  function: {
+    name: "check_inventory",
+    description: "Consultar o estoque de produtos. Use quando o cliente perguntar sobre disponibilidade, preço, ou produtos disponíveis. Pode buscar por nome, SKU ou categoria.",
+    parameters: {
+      type: "object",
+      properties: {
+        search: {
+          type: "string",
+          description: "Termo de busca: nome do produto, SKU ou categoria (ex: 'colágeno', 'VET-001', 'veterinario')"
+        }
+      },
+      required: ["search"],
+      additionalProperties: false
+    }
+  }
+};
+
+// Tool definition for reserving inventory (sale)
+const reserveInventoryTool = {
+  type: "function",
+  function: {
+    name: "reserve_inventory",
+    description: "Reservar/dar saída de estoque quando o cliente confirmar um pedido. Registra a movimentação e atualiza a quantidade. IMPORTANTE: só use após confirmação explícita do cliente.",
+    parameters: {
+      type: "object",
+      properties: {
+        product_name: {
+          type: "string",
+          description: "Nome exato do produto (como retornado por check_inventory)"
+        },
+        quantity: {
+          type: "number",
+          description: "Quantidade a reservar"
+        },
+        reason: {
+          type: "string",
+          description: "Motivo da reserva (ex: 'Venda confirmada pelo cliente')"
+        }
+      },
+      required: ["product_name", "quantity"],
+      additionalProperties: false
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1468,6 +1516,32 @@ Estágio atual do lead: ${currentStageName}
     console.error('[Nina] Pipeline context error (non-fatal):', pipeErr);
   }
 
+  // ===== INVENTORY CONTEXT =====
+  try {
+    const { data: lowStockProducts } = await supabase
+      .from('inventory')
+      .select('product_name, quantity, unit, min_quantity, category, price')
+      .eq('is_active', true)
+      .order('quantity', { ascending: true })
+      .limit(20);
+
+    if (lowStockProducts && lowStockProducts.length > 0) {
+      const lowStock = lowStockProducts.filter((p: any) => p.quantity <= p.min_quantity);
+      const categories = [...new Set(lowStockProducts.map((p: any) => p.category))];
+      finalPrompt += `\n\n<inventory_context>
+ESTOQUE — Você tem acesso ao estoque via ferramentas check_inventory e reserve_inventory.
+Categorias disponíveis: ${categories.join(', ')}
+Total de produtos ativos: ${lowStockProducts.length}
+${lowStock.length > 0 ? `⚠️ Produtos com estoque baixo: ${lowStock.map((p: any) => `${p.product_name} (${p.quantity} ${p.unit})`).join(', ')}` : 'Todos os produtos com estoque adequado.'}
+Quando o cliente perguntar sobre produtos, preços ou disponibilidade, use check_inventory.
+Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no estoque.
+</inventory_context>`;
+      console.log(`[Nina] Inventory context injected: ${lowStockProducts.length} products, ${lowStock.length} low stock`);
+    }
+  } catch (invErr) {
+    console.error('[Nina] Inventory context error (non-fatal):', invErr);
+  }
+
   // Debug: Log current date/time being used in prompt
   const nowBR = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   console.log('[Nina] Current date/time (BR):', nowBR);
@@ -1484,7 +1558,7 @@ Estágio atual do lead: ${currentStageName}
   console.log('[Nina] Using AI config:', { provider: aiConfig.provider, model: aiConfig.model });
 
   // Build tools array - only add appointment tools if enabled
-  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool]; // Always available
+  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool, checkInventoryTool, reserveInventoryTool]; // Always available
   if (settings?.ai_scheduling_enabled !== false) {
     tools.push(createAppointmentTool);
     tools.push(rescheduleAppointmentTool);
@@ -1769,6 +1843,72 @@ Estágio atual do lead: ${currentStageName}
         console.error('[Nina] Error parsing update_deal_stage arguments:', parseError);
       }
     }
+
+    // ===== CHECK INVENTORY TOOL =====
+    if (toolCall.function?.name === 'check_inventory') {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        console.log('[Nina] Processing check_inventory tool call:', args);
+        const searchTerm = (args.search || '').toLowerCase();
+
+        const { data: inventoryResults } = await supabase
+          .from('inventory')
+          .select('*')
+          .eq('is_active', true)
+          .or(`product_name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
+          .limit(10);
+
+        if (inventoryResults && inventoryResults.length > 0) {
+          const summary = inventoryResults.map((p: any) =>
+            `• ${p.product_name} (SKU: ${p.sku || 'N/A'}) — Qtd: ${p.quantity} ${p.unit} — R$ ${Number(p.price).toFixed(2)} — Cat: ${p.category}${p.quantity <= p.min_quantity ? ' ⚠️ ESTOQUE BAIXO' : ''}`
+          ).join('\n');
+          aiContent = (aiContent || '') + `\n\n[INVENTORY_CONTEXT]\n${summary}\n[/INVENTORY_CONTEXT]`;
+          console.log(`[Nina] Inventory search "${searchTerm}" returned ${inventoryResults.length} results`);
+        } else {
+          aiContent = (aiContent || '') + `\n\n[INVENTORY_CONTEXT]\nNenhum produto encontrado para "${searchTerm}".\n[/INVENTORY_CONTEXT]`;
+        }
+      } catch (parseError) {
+        console.error('[Nina] Error processing check_inventory:', parseError);
+      }
+    }
+
+    // ===== RESERVE INVENTORY TOOL =====
+    if (toolCall.function?.name === 'reserve_inventory') {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        console.log('[Nina] Processing reserve_inventory tool call:', args);
+
+        const { data: product } = await supabase
+          .from('inventory')
+          .select('*')
+          .ilike('product_name', args.product_name)
+          .eq('is_active', true)
+          .single();
+
+        if (!product) {
+          aiContent = (aiContent || '') + `\n\n[INVENTORY_ERROR] Produto "${args.product_name}" não encontrado no estoque. [/INVENTORY_ERROR]`;
+        } else if (product.quantity < args.quantity) {
+          aiContent = (aiContent || '') + `\n\n[INVENTORY_ERROR] Estoque insuficiente para "${args.product_name}". Disponível: ${product.quantity} ${product.unit}. [/INVENTORY_ERROR]`;
+        } else {
+          // Decrement
+          await supabase.from('inventory').update({ quantity: product.quantity - args.quantity }).eq('id', product.id);
+          // Log movement
+          await supabase.from('inventory_movements').insert({
+            inventory_id: product.id,
+            type: 'out',
+            quantity: args.quantity,
+            reason: args.reason || 'Venda via IA',
+            contact_id: conversation.contact_id,
+            conversation_id: conversation.id,
+            created_by: 'nina',
+          });
+          console.log(`[Nina] Reserved ${args.quantity} of "${product.product_name}" for contact ${conversation.contact_id}`);
+        }
+      } catch (parseError) {
+        console.error('[Nina] Error processing reserve_inventory:', parseError);
+      }
+    }
+
   }
 
   // If no content and we only got tool calls, generate deterministic confirmations (never generic)
