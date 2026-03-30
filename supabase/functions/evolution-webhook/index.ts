@@ -267,6 +267,18 @@ async function processMessageUpsert(
   // Extrair conteúdo da mensagem
   const { content, messageType, mediaUrl } = extractMessageContent(messageData);
 
+  // Check for duplicate message (prevent duplicate webhook deliveries)
+  const { data: existingMsg } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('whatsapp_message_id', messageId)
+    .maybeSingle();
+
+  if (existingMsg) {
+    console.log(`[evolution-webhook] Duplicate message ${messageId} - skipping`);
+    return;
+  }
+
   // Criar mensagem no banco
   const { data: message, error: msgError } = await supabase
     .from('messages')

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BookOpen, Upload, Trash2, Loader2, FileText, Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Loader2, FileText, Plus, AlertCircle, CheckCircle2, FileSpreadsheet, FileType } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,21 @@ interface KnowledgeFile {
   status: string;
   error_message: string | null;
   chunk_count: number;
+  category: string | null;
   created_at: string;
 }
+
+const ACCEPTED_FORMATS = '.txt,.md,.csv,.pdf,.docx,.xlsx,.xls';
+const ACCEPTED_MIME = [
+  'text/plain', 'text/markdown', 'text/csv',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+];
+const TEXT_FORMATS = ['txt', 'md', 'csv'];
+const BINARY_FORMATS = ['pdf', 'docx', 'xlsx', 'xls'];
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 const KnowledgeBase: React.FC = () => {
   const [files, setFiles] = useState<KnowledgeFile[]>([]);
@@ -27,7 +40,6 @@ const KnowledgeBase: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
 
-  // Process embeddings in batches to avoid CPU limits
   const processEmbeddingsBatched = async (fileId: string, content: string) => {
     let batchStart = 0;
     let hasMore = true;
@@ -83,7 +95,6 @@ const KnowledgeBase: React.FC = () => {
     try {
       const fileName = manualTitle.trim() || `Texto manual ${new Date().toLocaleDateString('pt-BR')}`;
 
-      // Create file record
       const { data: fileData, error: fileError } = await supabase
         .from('knowledge_files' as any)
         .insert({
@@ -98,8 +109,6 @@ const KnowledgeBase: React.FC = () => {
       if (fileError) throw fileError;
 
       const file = fileData as unknown as KnowledgeFile;
-
-      // Trigger batched embedding generation
       const success = await processEmbeddingsBatched(file.id, manualText);
 
       if (!success) {
@@ -110,7 +119,6 @@ const KnowledgeBase: React.FC = () => {
       setManualTitle('');
       toast.success('Documento adicionado! Processando embeddings...');
       
-      // Reload after a delay to show updated status
       setTimeout(loadFiles, 3000);
       loadFiles();
     } catch (error: any) {
@@ -122,42 +130,104 @@ const KnowledgeBase: React.FC = () => {
   };
 
   const processFile = async (file: File) => {
-    if (!file.name.endsWith('.txt') && !file.name.endsWith('.md') && !file.name.endsWith('.csv')) {
-      toast.error('Formatos suportados: .txt, .md, .csv');
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isText = TEXT_FORMATS.includes(ext);
+    const isBinary = BINARY_FORMATS.includes(ext);
+
+    if (!isText && !isBinary) {
+      toast.error('Formatos suportados: .txt, .md, .csv, .pdf, .docx, .xlsx');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Arquivo muito grande (máx 5MB)');
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('Arquivo muito grande (máx 20MB)');
       return;
     }
 
     setUploading(true);
     try {
-      const content = await file.text();
+      if (isText) {
+        // Text files: direct extraction
+        const content = await file.text();
 
-      const { data: fileData, error: fileError } = await supabase
-        .from('knowledge_files' as any)
-        .insert({
-          file_name: file.name,
-          file_type: file.name.split('.').pop() || 'text',
-          file_size: file.size,
-          status: 'processing'
-        })
-        .select()
-        .single();
+        const { data: fileData, error: fileError } = await supabase
+          .from('knowledge_files' as any)
+          .insert({
+            file_name: file.name,
+            file_type: ext,
+            file_size: file.size,
+            status: 'processing'
+          })
+          .select()
+          .single();
 
-      if (fileError) throw fileError;
+        if (fileError) throw fileError;
 
-      const fileRecord = fileData as unknown as KnowledgeFile;
+        const fileRecord = fileData as unknown as KnowledgeFile;
+        const success = await processEmbeddingsBatched(fileRecord.id, content);
 
-      const success = await processEmbeddingsBatched(fileRecord.id, content);
+        if (!success) {
+          toast.error('Erro ao processar embeddings');
+        }
+      } else {
+        // Binary files: upload to storage, then extract via edge function
+        const storagePath = `${Date.now()}-${file.name}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('knowledge-docs')
+          .upload(storagePath, file, {
+            contentType: file.type,
+            upsert: false
+          });
 
-      if (!success) {
-        toast.error('Erro ao processar embeddings');
+        if (uploadError) throw uploadError;
+
+        // Create file record
+        const { data: fileData, error: fileError } = await supabase
+          .from('knowledge_files' as any)
+          .insert({
+            file_name: file.name,
+            file_type: ext,
+            file_size: file.size,
+            status: 'processing',
+            storage_path: storagePath
+          })
+          .select()
+          .single();
+
+        if (fileError) throw fileError;
+
+        const fileRecord = fileData as unknown as KnowledgeFile;
+
+        // Call extract-document edge function
+        toast.info(`Analisando ${file.name} com IA...`);
+        
+        const { data: extractResult, error: extractError } = await supabase.functions.invoke('extract-document', {
+          body: {
+            file_id: fileRecord.id,
+            storage_path: storagePath,
+            file_type: ext,
+            file_name: file.name
+          }
+        });
+
+        if (extractError) {
+          console.error('Extract error:', extractError);
+          toast.error('Erro ao extrair texto do documento');
+          await supabase
+            .from('knowledge_files' as any)
+            .update({ status: 'error', error_message: extractError.message })
+            .eq('id', fileRecord.id);
+        } else if (extractResult?.text) {
+          // Now generate embeddings from extracted text
+          const success = await processEmbeddingsBatched(fileRecord.id, extractResult.text);
+          if (!success) {
+            toast.error('Erro ao processar embeddings');
+          }
+        }
       }
 
-      toast.success('Arquivo enviado! Processando embeddings...');
+      toast.success('Arquivo processado! Gerando embeddings...');
       setTimeout(loadFiles, 3000);
       loadFiles();
     } catch (error: any) {
@@ -214,6 +284,9 @@ const KnowledgeBase: React.FC = () => {
 
   const deleteFile = async (fileId: string) => {
     try {
+      // Find file to get storage_path
+      const file = files.find(f => f.id === fileId);
+      
       const { error } = await supabase
         .from('knowledge_files' as any)
         .delete()
@@ -221,11 +294,33 @@ const KnowledgeBase: React.FC = () => {
 
       if (error) throw error;
 
+      // Delete from storage if binary file
+      if (file && (file as any).storage_path) {
+        await supabase.storage
+          .from('knowledge-docs')
+          .remove([(file as any).storage_path]);
+      }
+
       setFiles(prev => prev.filter(f => f.id !== fileId));
       toast.success('Documento removido');
     } catch (error: any) {
       console.error('Error deleting file:', error);
       toast.error('Erro ao remover: ' + error.message);
+    }
+  };
+
+  const getFileIcon = (fileType: string) => {
+    switch (fileType) {
+      case 'pdf':
+        return <FileType className="w-4 h-4 text-red-500 flex-shrink-0" />;
+      case 'docx':
+        return <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />;
+      case 'xlsx':
+      case 'xls':
+      case 'csv':
+        return <FileSpreadsheet className="w-4 h-4 text-green-500 flex-shrink-0" />;
+      default:
+        return <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />;
     }
   };
 
@@ -257,6 +352,20 @@ const KnowledgeBase: React.FC = () => {
     }
   };
 
+  const getCategoryLabel = (category: string | null) => {
+    const labels: Record<string, string> = {
+      produto_servico: '🏷️ Produto',
+      oferta_precos: '💰 Oferta',
+      precos: '💰 Preços',
+      faq: '❓ FAQ',
+      politicas: '📋 Políticas',
+      provas_sociais: '⭐ Provas Sociais',
+      scripts_vendas: '📝 Scripts',
+      geral: '📄 Geral',
+    };
+    return category ? labels[category] || '📄 ' + category : null;
+  };
+
   return (
     <div
       className="rounded-xl border border-border bg-card p-6"
@@ -271,8 +380,9 @@ const KnowledgeBase: React.FC = () => {
       </div>
 
       <p className="text-xs text-muted-foreground mb-4">
-        Adicione documentos e textos para a Nina usar como contexto nas conversas. 
-        O conteúdo será indexado automaticamente com busca semântica (RAG).
+        Adicione documentos para a IA usar como contexto nas conversas.
+        Suporta <strong>PDF, DOCX, XLSX, CSV, TXT e MD</strong>. 
+        Documentos são analisados por IA, organizados por categoria e indexados com busca semântica (RAG).
       </p>
 
       {/* Drag & Drop Zone */}
@@ -281,7 +391,7 @@ const KnowledgeBase: React.FC = () => {
           <div className="text-center">
             <Upload className="w-10 h-10 mx-auto mb-2 text-primary animate-bounce" />
             <p className="text-sm font-medium text-primary">Solte o arquivo aqui</p>
-            <p className="text-xs text-muted-foreground mt-1">.txt, .md, .csv (máx 5MB)</p>
+            <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, XLSX, CSV, TXT, MD (máx 20MB)</p>
           </div>
         </div>
       )}
@@ -325,7 +435,7 @@ const KnowledgeBase: React.FC = () => {
                 Upload arquivo
                 <input
                   type="file"
-                  accept=".txt,.md,.csv"
+                  accept={ACCEPTED_FORMATS}
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -344,7 +454,7 @@ const KnowledgeBase: React.FC = () => {
         <div className="text-center py-8 text-muted-foreground">
           <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">Nenhum documento adicionado</p>
-          <p className="text-xs mt-1">Adicione textos ou arquivos para enriquecer as respostas da Nina</p>
+          <p className="text-xs mt-1">Adicione textos ou arquivos para enriquecer as respostas da IA</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -357,10 +467,10 @@ const KnowledgeBase: React.FC = () => {
               className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-muted border border-border"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                {getFileIcon(file.file_type)}
                 <div className="min-w-0">
                   <p className="text-sm text-foreground truncate">{file.file_name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {getStatusBadge(file.status)}
                     {file.chunk_count > 0 && (
                       <span className="text-[10px] text-muted-foreground">
@@ -370,6 +480,11 @@ const KnowledgeBase: React.FC = () => {
                     <span className="text-[10px] text-muted-foreground">
                       {file.file_type === 'manual' ? 'Texto' : file.file_type.toUpperCase()}
                     </span>
+                    {file.category && file.category !== 'geral' && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {getCategoryLabel(file.category)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
