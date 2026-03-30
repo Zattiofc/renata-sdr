@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, GripVertical, Plus, Lock, Bot, User, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, GripVertical, Plus, Bot, User, AlertTriangle } from 'lucide-react';
 import { KanbanColumn } from '@/types';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
@@ -343,19 +343,13 @@ export function PipelineSettingsModal({ open, onClose, onSave }: PipelineSetting
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        {stage.isSystem ? (
-                          <Button size="sm" variant="ghost" disabled title="Etapa de sistema não pode ser deletada">
-                            <Lock className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteClick(stage)}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteClick(stage)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
                       </>
                     )}
                   </div>
