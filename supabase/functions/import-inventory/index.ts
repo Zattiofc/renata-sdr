@@ -186,12 +186,13 @@ Ignore linhas de cabeçalho, totais, ou linhas vazias.`;
     let products: any[];
     try {
       products = JSON.parse(aiContent);
-    } catch (parseErr) {
+    } catch (_parseErr) {
       console.error('[import-inventory] Failed to parse AI response:', aiContent.substring(0, 500));
       return new Response(
         JSON.stringify({ error: 'Failed to parse AI response', raw: aiContent.substring(0, 500), ai_shape: typeof aiData }),
         { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
 
     if (!Array.isArray(products) || products.length === 0) {
       return new Response(JSON.stringify({ error: 'No products found in file', products: [] }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
