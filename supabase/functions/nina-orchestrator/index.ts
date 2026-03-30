@@ -1616,6 +1616,7 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
   let appointmentCreated = null;
   let appointmentRescheduled = null;
   let appointmentCancelled = null;
+  const toolResultsForSecondPass: { name: string; result: string }[] = [];
   
   for (const toolCall of toolCalls) {
     if (toolCall.function?.name === 'create_appointment') {
@@ -1862,10 +1863,10 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
           const summary = inventoryResults.map((p: any) =>
             `• ${p.product_name} (SKU: ${p.sku || 'N/A'}) — Qtd: ${p.quantity} ${p.unit} — R$ ${Number(p.price).toFixed(2)} — Cat: ${p.category}${p.quantity <= p.min_quantity ? ' ⚠️ ESTOQUE BAIXO' : ''}`
           ).join('\n');
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_CONTEXT]\n${summary}\n[/INVENTORY_CONTEXT]`;
+          toolResultsForSecondPass.push({ name: 'check_inventory', result: `Resultados do estoque:\n${summary}` });
           console.log(`[Nina] Inventory search "${searchTerm}" returned ${inventoryResults.length} results`);
         } else {
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_CONTEXT]\nNenhum produto encontrado para "${searchTerm}".\n[/INVENTORY_CONTEXT]`;
+          toolResultsForSecondPass.push({ name: 'check_inventory', result: `Nenhum produto encontrado para "${searchTerm}".` });
         }
       } catch (parseError) {
         console.error('[Nina] Error processing check_inventory:', parseError);
@@ -1886,9 +1887,9 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
           .single();
 
         if (!product) {
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_ERROR] Produto "${args.product_name}" não encontrado no estoque. [/INVENTORY_ERROR]`;
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Produto "${args.product_name}" não encontrado no estoque.` });
         } else if (product.quantity < args.quantity) {
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_ERROR] Estoque insuficiente para "${args.product_name}". Disponível: ${product.quantity} ${product.unit}. [/INVENTORY_ERROR]`;
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Estoque insuficiente para "${args.product_name}". Disponível: ${product.quantity} ${product.unit}.` });
         } else {
           // Decrement
           await supabase.from('inventory').update({ quantity: product.quantity - args.quantity }).eq('id', product.id);
@@ -1902,6 +1903,7 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
             conversation_id: conversation.id,
             created_by: 'nina',
           });
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Reserva confirmada: ${args.quantity}x "${product.product_name}". Estoque restante: ${product.quantity - args.quantity} ${product.unit}.` });
           console.log(`[Nina] Reserved ${args.quantity} of "${product.product_name}" for contact ${conversation.contact_id}`);
         }
       } catch (parseError) {
@@ -1909,6 +1911,46 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
       }
     }
 
+  }
+
+  // ===== SECOND AI PASS: If tool results need to be processed by AI =====
+  if (toolResultsForSecondPass.length > 0) {
+    console.log(`[Nina] Running second AI pass with ${toolResultsForSecondPass.length} tool results`);
+    
+    // Build tool results as assistant context for a follow-up AI call
+    const toolResultsSummary = toolResultsForSecondPass
+      .map(tr => `[Resultado de ${tr.name}]: ${tr.result}`)
+      .join('\n\n');
+    
+    try {
+      const secondPassMessages = [
+        { role: 'system' as const, content: finalPrompt + '\n\nIMPORTANTE: Responda ao cliente de forma NATURAL usando os dados das ferramentas. NUNCA inclua tags como [INVENTORY_CONTEXT], [INVENTORY_ERROR], <inventory_context> ou qualquer marcador interno na resposta. Apresente as informações de forma conversacional e amigável.' },
+        ...conversationHistory,
+        // Add the AI's first response if it had content
+        ...(aiContent ? [{ role: 'assistant' as const, content: aiContent }] : []),
+        // Add tool results as a system message
+        { role: 'user' as const, content: `[SISTEMA INTERNO - NÃO REPRODUZA ESTAS TAGS]\nResultados das ferramentas executadas:\n${toolResultsSummary}\n\nAgora responda ao cliente de forma natural usando estas informações. NÃO inclua tags, marcadores ou prefixos internos.` }
+      ];
+
+      const secondResponse = await callAI(aiConfig, {
+        messages: secondPassMessages,
+        temperature: 0.7,
+        max_tokens: 800,
+      });
+
+      if (secondResponse.ok) {
+        const secondData = await secondResponse.json();
+        const secondContent = secondData.choices?.[0]?.message?.content;
+        if (secondContent && secondContent.trim()) {
+          aiContent = secondContent;
+          console.log('[Nina] Second pass response generated successfully');
+        }
+      } else {
+        console.error('[Nina] Second pass AI call failed:', secondResponse.status);
+      }
+    } catch (secondPassError) {
+      console.error('[Nina] Error in second AI pass:', secondPassError);
+    }
   }
 
   // If no content and we only got tool calls, generate deterministic confirmations (never generic)
@@ -1958,6 +2000,9 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
     console.warn('[Nina] Using deterministic contextual fallback response');
     aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact);
   }
+
+  // ===== SANITIZE: Strip any internal tags that may have leaked =====
+  aiContent = sanitizeResponseForClient(aiContent);
 
   console.log('[Nina] Final response length:', aiContent.length);
 
@@ -2067,6 +2112,29 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
       }
     })
   }).catch(err => console.error('[Nina] Error triggering analyze-conversation:', err));
+}
+
+// Sanitize AI response to remove any internal tags/markers before sending to client
+function sanitizeResponseForClient(content: string): string {
+  if (!content) return content;
+  
+  // Remove [INVENTORY_CONTEXT]...[/INVENTORY_CONTEXT] blocks
+  content = content.replace(/\[INVENTORY_CONTEXT\][\s\S]*?\[\/INVENTORY_CONTEXT\]/gi, '');
+  // Remove [INVENTORY_ERROR]...[/INVENTORY_ERROR] blocks
+  content = content.replace(/\[INVENTORY_ERROR\][\s\S]*?\[\/INVENTORY_ERROR\]/gi, '');
+  // Remove <inventory_context>...</inventory_context> blocks
+  content = content.replace(/<inventory_context>[\s\S]*?<\/inventory_context>/gi, '');
+  // Remove [SISTEMA INTERNO...] blocks
+  content = content.replace(/\[SISTEMA INTERNO[^\]]*\][\s\S]*?(?=\n\n|$)/gi, '');
+  // Remove [Resultado de ...]: blocks
+  content = content.replace(/\[Resultado de [^\]]+\]:.*$/gm, '');
+  // Remove any remaining square-bracket system markers
+  content = content.replace(/\[(INVENTORY_CONTEXT|INVENTORY_ERROR|\/INVENTORY_CONTEXT|\/INVENTORY_ERROR|SISTEMA INTERNO)\]/gi, '');
+  
+  // Clean up excessive whitespace
+  content = content.replace(/\n{3,}/g, '\n\n').trim();
+  
+  return content;
 }
 
 function isGenericContextLossResponse(content: string | null | undefined): boolean {
