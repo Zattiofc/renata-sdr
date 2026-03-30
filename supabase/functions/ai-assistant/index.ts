@@ -9,17 +9,19 @@ const corsHeaders = {
 const LOVABLE_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 const tools = [
+  // ===== CONTACTS =====
   {
     type: "function",
     function: {
       name: "query_contacts",
-      description: "Buscar contatos no banco de dados. Pode filtrar por nome, telefone, status de lead, última atividade, tags, etc.",
+      description: "Buscar contatos no banco de dados. Pode filtrar por nome, telefone, status de lead, última atividade, tags, empresa, cidade.",
       parameters: {
         type: "object",
         properties: {
           search_term: { type: "string", description: "Termo de busca (nome, telefone, email)" },
           lead_state: { type: "string", description: "Estado do lead: NEW_LEAD, ENGAGED, QUALIFIED, NEGOTIATING, WON, LOST, INACTIVE" },
           inactive_hours: { type: "number", description: "Filtrar contatos inativos há mais de X horas" },
+          tags: { type: "array", items: { type: "string" }, description: "Filtrar por tags" },
           limit: { type: "number", description: "Número máximo de resultados (padrão 20)" },
         },
         required: [],
@@ -29,17 +31,51 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "update_contact",
+      description: "Atualizar dados de um contato existente (nome, email, tags, notas, lead_state, empresa, cargo, cidade, estado, is_blocked).",
+      parameters: {
+        type: "object",
+        properties: {
+          contact_id: { type: "string", description: "ID do contato" },
+          contact_name: { type: "string", description: "Nome do contato para busca (se não tiver ID)" },
+          updates: {
+            type: "object",
+            description: "Campos a atualizar",
+            properties: {
+              name: { type: "string" },
+              call_name: { type: "string" },
+              email: { type: "string" },
+              tags: { type: "array", items: { type: "string" } },
+              notes: { type: "string" },
+              lead_state: { type: "string" },
+              empresa: { type: "string" },
+              cargo: { type: "string" },
+              cidade: { type: "string" },
+              estado: { type: "string" },
+              is_blocked: { type: "boolean" },
+              blocked_reason: { type: "string" },
+            },
+          },
+        },
+        required: ["updates"],
+      },
+    },
+  },
+  // ===== DEALS / PIPELINE =====
+  {
+    type: "function",
+    function: {
       name: "query_deals",
-      description: "Buscar deals/negócios no pipeline. Pode filtrar por estágio, contato, valor, prioridade.",
+      description: "Buscar deals/negócios no pipeline. Pode filtrar por estágio, contato, valor, prioridade, tags.",
       parameters: {
         type: "object",
         properties: {
           stage_name: { type: "string", description: "Nome do estágio do pipeline" },
           contact_name: { type: "string", description: "Nome do contato associado" },
-          min_value: { type: "number", description: "Valor mínimo do deal" },
-          priority: { type: "string", description: "Prioridade: low, medium, high" },
+          min_value: { type: "number" },
+          priority: { type: "string", description: "low, medium, high" },
           stale_days: { type: "number", description: "Deals parados há mais de X dias" },
-          limit: { type: "number", description: "Número máximo de resultados (padrão 20)" },
+          limit: { type: "number" },
         },
         required: [],
       },
@@ -48,18 +84,82 @@ const tools = [
   {
     type: "function",
     function: {
-      name: "update_deal_stage",
-      description: "Mover um deal para outro estágio do pipeline.",
+      name: "update_deal",
+      description: "Atualizar um deal: mover estágio, alterar valor, prioridade, tags, notas, marcar como ganho/perdido.",
       parameters: {
         type: "object",
         properties: {
           deal_id: { type: "string", description: "ID do deal" },
-          stage_name: { type: "string", description: "Nome do novo estágio" },
+          deal_title: { type: "string", description: "Título do deal para busca (se não tiver ID)" },
+          updates: {
+            type: "object",
+            properties: {
+              stage_name: { type: "string", description: "Nome do novo estágio" },
+              value: { type: "number" },
+              priority: { type: "string" },
+              tags: { type: "array", items: { type: "string" } },
+              notes: { type: "string" },
+              mark_won: { type: "boolean" },
+              mark_lost: { type: "boolean" },
+              lost_reason: { type: "string" },
+            },
+          },
         },
-        required: ["deal_id", "stage_name"],
+        required: ["updates"],
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "manage_pipeline_stages",
+      description: "Listar, criar, atualizar ou reordenar estágios do pipeline de vendas.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "create", "update", "reorder"], description: "Ação a executar" },
+          stage_id: { type: "string", description: "ID do estágio (para update)" },
+          title: { type: "string", description: "Nome do estágio" },
+          color: { type: "string", description: "Cor do estágio (ex: border-blue-500)" },
+          position: { type: "number", description: "Posição no pipeline" },
+          is_active: { type: "boolean" },
+          ai_trigger_criteria: { type: "string", description: "Critérios para a IA mover deals para este estágio automaticamente" },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== TEAM =====
+  {
+    type: "function",
+    function: {
+      name: "manage_team",
+      description: "Gerenciar equipe: listar membros, funções, atualizar status, configurar recebimento de reuniões. Também gerencia funções (closer, SDR, etc).",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list_members", "list_functions", "update_member", "update_function", "create_function"], description: "Ação" },
+          member_id: { type: "string" },
+          function_id: { type: "string" },
+          updates: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              email: { type: "string" },
+              phone: { type: "string" },
+              status: { type: "string", enum: ["active", "inactive", "invited"] },
+              receives_meetings: { type: "boolean" },
+              function_id: { type: "string" },
+              is_active: { type: "boolean" },
+              description: { type: "string" },
+            },
+          },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== WHATSAPP MESSAGING =====
   {
     type: "function",
     function: {
@@ -68,9 +168,9 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          phone_number: { type: "string", description: "Número do telefone do destinatário (com DDI)" },
+          phone_number: { type: "string", description: "Número do telefone (com DDI)" },
           message: { type: "string", description: "Conteúdo da mensagem" },
-          contact_name: { type: "string", description: "Nome do contato (para busca se phone_number não fornecido)" },
+          contact_name: { type: "string", description: "Nome do contato (para busca)" },
         },
         required: ["message"],
       },
@@ -80,265 +180,664 @@ const tools = [
     type: "function",
     function: {
       name: "send_bulk_followup",
-      description: "Enviar follow-up para múltiplos contatos de uma vez. Filtra contatos e envia mensagem personalizada.",
+      description: "Enviar follow-up para múltiplos contatos. Filtra e envia mensagem personalizada com {name}.",
       parameters: {
         type: "object",
         properties: {
           filter: {
             type: "object",
-            description: "Filtros para selecionar contatos",
             properties: {
-              inactive_hours: { type: "number", description: "Inativos há mais de X horas" },
-              lead_state: { type: "string", description: "Estado do lead" },
-              tags: { type: "array", items: { type: "string" }, description: "Tags dos contatos" },
+              inactive_hours: { type: "number" },
+              lead_state: { type: "string" },
+              tags: { type: "array", items: { type: "string" } },
             },
           },
-          message_template: { type: "string", description: "Template da mensagem. Use {name} para nome do contato." },
+          message_template: { type: "string", description: "Use {name} para nome do contato" },
           max_recipients: { type: "number", description: "Máximo de destinatários (padrão 10)" },
         },
         required: ["message_template"],
       },
     },
   },
+  // ===== INVENTORY =====
   {
     type: "function",
     function: {
-      name: "check_inventory",
-      description: "Consultar o estoque atual de produtos.",
+      name: "manage_inventory",
+      description: "Consultar, adicionar, atualizar estoque ou registrar movimentações (entrada/saída).",
       parameters: {
         type: "object",
         properties: {
-          product_name: { type: "string", description: "Nome do produto para buscar" },
-          low_stock_only: { type: "boolean", description: "Mostrar apenas produtos com estoque baixo" },
+          action: { type: "string", enum: ["list", "create", "update", "add_stock", "remove_stock"], description: "Ação" },
+          product_id: { type: "string" },
+          product_name: { type: "string" },
+          low_stock_only: { type: "boolean" },
+          updates: {
+            type: "object",
+            properties: {
+              product_name: { type: "string" },
+              description: { type: "string" },
+              sku: { type: "string" },
+              price: { type: "number" },
+              quantity: { type: "number" },
+              min_quantity: { type: "number" },
+              category: { type: "string" },
+              unit: { type: "string" },
+              is_active: { type: "boolean" },
+            },
+          },
+          movement_quantity: { type: "number", description: "Quantidade para entrada/saída" },
+          movement_reason: { type: "string", description: "Motivo da movimentação" },
         },
-        required: [],
+        required: ["action"],
       },
     },
   },
+  // ===== APPOINTMENTS =====
   {
     type: "function",
     function: {
-      name: "list_appointments",
-      description: "Listar agendamentos/reuniões.",
+      name: "manage_appointments",
+      description: "Listar, criar, atualizar ou cancelar agendamentos/reuniões.",
       parameters: {
         type: "object",
         properties: {
-          date_from: { type: "string", description: "Data inicial (YYYY-MM-DD)" },
-          date_to: { type: "string", description: "Data final (YYYY-MM-DD)" },
-          status: { type: "string", description: "Status: scheduled, completed, cancelled" },
+          action: { type: "string", enum: ["list", "create", "update", "cancel"], description: "Ação" },
+          appointment_id: { type: "string" },
+          date_from: { type: "string", description: "YYYY-MM-DD" },
+          date_to: { type: "string" },
+          status: { type: "string" },
+          new_data: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              date: { type: "string" },
+              time: { type: "string" },
+              duration: { type: "number" },
+              description: { type: "string" },
+              contact_name: { type: "string" },
+              status: { type: "string" },
+            },
+          },
         },
-        required: [],
+        required: ["action"],
       },
     },
   },
+  // ===== CONVERSATIONS =====
   {
     type: "function",
     function: {
-      name: "query_conversations",
-      description: "Buscar conversas recentes, sem resposta, ou por status.",
+      name: "manage_conversations",
+      description: "Buscar conversas, alterar status (nina/human/waiting/closed), ver mensagens recentes de uma conversa.",
       parameters: {
         type: "object",
         properties: {
-          status: { type: "string", description: "Status da conversa: nina, human, waiting, closed" },
-          unanswered_hours: { type: "number", description: "Conversas sem resposta há mais de X horas" },
-          contact_name: { type: "string", description: "Nome do contato" },
-          limit: { type: "number", description: "Número máximo de resultados (padrão 20)" },
+          action: { type: "string", enum: ["list", "get_messages", "update_status"], description: "Ação" },
+          conversation_id: { type: "string" },
+          contact_name: { type: "string" },
+          status: { type: "string", description: "nina, human, waiting, closed" },
+          unanswered_hours: { type: "number" },
+          new_status: { type: "string", description: "Novo status para a conversa" },
+          limit: { type: "number" },
         },
-        required: [],
+        required: ["action"],
       },
     },
   },
+  // ===== AUTOMATIONS =====
+  {
+    type: "function",
+    function: {
+      name: "manage_automations",
+      description: "Listar, criar, ativar/desativar automações do sistema (follow-ups automáticos, etc).",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "create", "toggle", "delete"], description: "Ação" },
+          automation_id: { type: "string" },
+          new_data: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              trigger_type: { type: "string", description: "no_reply, new_contact, lead_state_change, tag_added" },
+              trigger_config: { type: "object" },
+              action_type: { type: "string", description: "send_message, update_lead_state, assign_team, send_material" },
+              action_config: { type: "object" },
+              cooldown_hours: { type: "number" },
+              max_executions: { type: "number" },
+            },
+          },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== MATERIALS =====
+  {
+    type: "function",
+    function: {
+      name: "manage_materials",
+      description: "Listar, consultar materiais oficiais (folhetos, catálogos, vídeos) e logs de envio.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "list_send_logs"], description: "Ação" },
+          search_term: { type: "string" },
+          linha_negocio: { type: "string" },
+          limit: { type: "number" },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== NINA SETTINGS =====
+  {
+    type: "function",
+    function: {
+      name: "manage_nina_settings",
+      description: "Consultar ou atualizar configurações da IA Nina: horário comercial, delays, modelo de IA, status ativo/inativo, nome da empresa, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["get", "update"], description: "Ação" },
+          updates: {
+            type: "object",
+            properties: {
+              is_active: { type: "boolean" },
+              auto_response_enabled: { type: "boolean" },
+              company_name: { type: "string" },
+              sdr_name: { type: "string" },
+              business_hours_start: { type: "string" },
+              business_hours_end: { type: "string" },
+              business_days: { type: "array", items: { type: "number" } },
+              response_delay_min: { type: "number" },
+              response_delay_max: { type: "number" },
+              message_breaking_enabled: { type: "boolean" },
+              ai_scheduling_enabled: { type: "boolean" },
+            },
+          },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== KNOWLEDGE BASE =====
+  {
+    type: "function",
+    function: {
+      name: "manage_knowledge_base",
+      description: "Consultar a base de conhecimento: listar arquivos, buscar chunks por termo, ver sugestões pendentes.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list_files", "search_chunks", "list_suggestions"], description: "Ação" },
+          search_term: { type: "string", description: "Termo para busca semântica nos chunks" },
+          category: { type: "string" },
+          status: { type: "string", description: "Status das sugestões: pending, approved, rejected" },
+          limit: { type: "number" },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== BROADCASTS =====
+  {
+    type: "function",
+    function: {
+      name: "manage_broadcasts",
+      description: "Listar campanhas de broadcast e seus resultados.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list_campaigns", "get_campaign_details"] },
+          campaign_id: { type: "string" },
+          limit: { type: "number" },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== AUDIT / STATS =====
   {
     type: "function",
     function: {
       name: "get_system_stats",
-      description: "Obter estatísticas gerais do sistema: total de contatos, deals, conversas ativas, etc.",
+      description: "Obter estatísticas gerais do sistema: total de contatos, deals por estágio, conversas ativas, estoque, agendamentos, leads por estado.",
       parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_audit_logs",
+      description: "Consultar logs de auditoria: alterações de configurações, ações executadas, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          entity_type: { type: "string", description: "Tipo de entidade (nina_settings, pipeline, deal, etc)" },
+          action: { type: "string", description: "Tipo de ação (update, create, delete)" },
+          limit: { type: "number" },
+        },
+        required: [],
+      },
+    },
+  },
+  // ===== WHATSAPP INSTANCES =====
+  {
+    type: "function",
+    function: {
+      name: "manage_whatsapp_instances",
+      description: "Listar instâncias WhatsApp configuradas, ver status de conexão.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "check_status"], description: "Ação" },
+        },
+        required: ["action"],
+      },
     },
   },
 ];
 
-// Tool execution functions
+// ========== TOOL EXECUTION FUNCTIONS ==========
+
 async function executeQueryContacts(supabase: any, args: any) {
-  let query = supabase.from("contacts").select("id, name, call_name, phone_number, email, lead_state, last_activity, tags, empresa, cidade, resumo_vivo");
-  
-  if (args.search_term) {
-    query = query.or(`name.ilike.%${args.search_term}%,call_name.ilike.%${args.search_term}%,phone_number.ilike.%${args.search_term}%,email.ilike.%${args.search_term}%`);
-  }
+  let query = supabase.from("contacts").select("id, name, call_name, phone_number, email, lead_state, last_activity, tags, empresa, cidade, cargo, estado, resumo_vivo, is_blocked, notes");
+  if (args.search_term) query = query.or(`name.ilike.%${args.search_term}%,call_name.ilike.%${args.search_term}%,phone_number.ilike.%${args.search_term}%,email.ilike.%${args.search_term}%`);
   if (args.lead_state) query = query.eq("lead_state", args.lead_state);
-  if (args.inactive_hours) {
-    const cutoff = new Date(Date.now() - args.inactive_hours * 3600000).toISOString();
-    query = query.lt("last_activity", cutoff);
-  }
-  
+  if (args.inactive_hours) query = query.lt("last_activity", new Date(Date.now() - args.inactive_hours * 3600000).toISOString());
+  if (args.tags?.length) query = query.overlaps("tags", args.tags);
   const { data, error } = await query.order("last_activity", { ascending: false }).limit(args.limit || 20);
   if (error) return { error: error.message };
   return { contacts: data, count: data?.length || 0 };
 }
 
+async function executeUpdateContact(supabase: any, args: any) {
+  let contactId = args.contact_id;
+  if (!contactId && args.contact_name) {
+    const { data } = await supabase.from("contacts").select("id, name").ilike("name", `%${args.contact_name}%`).limit(1);
+    if (!data?.length) return { error: `Contato "${args.contact_name}" não encontrado` };
+    contactId = data[0].id;
+  }
+  if (!contactId) return { error: "contact_id ou contact_name necessário" };
+  const updates = { ...args.updates, updated_at: new Date().toISOString() };
+  const { error } = await supabase.from("contacts").update(updates).eq("id", contactId);
+  if (error) return { error: error.message };
+  return { success: true, message: "Contato atualizado" };
+}
+
 async function executeQueryDeals(supabase: any, args: any) {
-  let query = supabase.from("deals").select("id, title, value, priority, stage, stage_id, company, notes, tags, created_at, updated_at, contact_id, contacts(name, phone_number), pipeline_stages(title)");
-  
+  let query = supabase.from("deals").select("id, title, value, priority, stage, stage_id, company, notes, tags, created_at, updated_at, lost_reason, won_at, lost_at, qualification_score, contact_id, contacts(name, phone_number), pipeline_stages(title, color)");
   if (args.contact_name) {
-    const { data: contacts } = await supabase.from("contacts").select("id").ilike("name", `%${args.contact_name}%`);
-    if (contacts?.length) query = query.in("contact_id", contacts.map((c: any) => c.id));
-    else return { deals: [], count: 0, message: "Nenhum contato encontrado com esse nome" };
+    const { data: c } = await supabase.from("contacts").select("id").ilike("name", `%${args.contact_name}%`);
+    if (c?.length) query = query.in("contact_id", c.map((x: any) => x.id));
+    else return { deals: [], count: 0 };
   }
   if (args.priority) query = query.eq("priority", args.priority);
   if (args.min_value) query = query.gte("value", args.min_value);
-  if (args.stale_days) {
-    const cutoff = new Date(Date.now() - args.stale_days * 86400000).toISOString();
-    query = query.lt("updated_at", cutoff);
-  }
+  if (args.stale_days) query = query.lt("updated_at", new Date(Date.now() - args.stale_days * 86400000).toISOString());
   if (args.stage_name) {
-    const { data: stages } = await supabase.from("pipeline_stages").select("id").ilike("title", `%${args.stage_name}%`);
-    if (stages?.length) query = query.in("stage_id", stages.map((s: any) => s.id));
+    const { data: s } = await supabase.from("pipeline_stages").select("id").ilike("title", `%${args.stage_name}%`);
+    if (s?.length) query = query.in("stage_id", s.map((x: any) => x.id));
   }
-  
   const { data, error } = await query.order("updated_at", { ascending: false }).limit(args.limit || 20);
   if (error) return { error: error.message };
   return { deals: data, count: data?.length || 0 };
 }
 
-async function executeUpdateDealStage(supabase: any, args: any) {
-  const { data: stages } = await supabase.from("pipeline_stages").select("id, title").ilike("title", `%${args.stage_name}%`);
-  if (!stages?.length) return { error: `Estágio "${args.stage_name}" não encontrado` };
-  
-  const stage = stages[0];
-  const { error } = await supabase.from("deals").update({ stage_id: stage.id, stage: stage.title, updated_at: new Date().toISOString() }).eq("id", args.deal_id);
+async function executeUpdateDeal(supabase: any, args: any) {
+  let dealId = args.deal_id;
+  if (!dealId && args.deal_title) {
+    const { data } = await supabase.from("deals").select("id").ilike("title", `%${args.deal_title}%`).limit(1);
+    if (!data?.length) return { error: `Deal "${args.deal_title}" não encontrado` };
+    dealId = data[0].id;
+  }
+  if (!dealId) return { error: "deal_id ou deal_title necessário" };
+
+  const u: any = { updated_at: new Date().toISOString() };
+  const upd = args.updates;
+  if (upd.stage_name) {
+    const { data: s } = await supabase.from("pipeline_stages").select("id, title").ilike("title", `%${upd.stage_name}%`);
+    if (!s?.length) return { error: `Estágio "${upd.stage_name}" não encontrado` };
+    u.stage_id = s[0].id; u.stage = s[0].title;
+  }
+  if (upd.value !== undefined) u.value = upd.value;
+  if (upd.priority) u.priority = upd.priority;
+  if (upd.tags) u.tags = upd.tags;
+  if (upd.notes) u.notes = upd.notes;
+  if (upd.mark_won) u.won_at = new Date().toISOString();
+  if (upd.mark_lost) { u.lost_at = new Date().toISOString(); u.lost_reason = upd.lost_reason || null; }
+
+  const { error } = await supabase.from("deals").update(u).eq("id", dealId);
   if (error) return { error: error.message };
-  return { success: true, message: `Deal movido para "${stage.title}"` };
+  return { success: true, message: "Deal atualizado" };
+}
+
+async function executeManagePipelineStages(supabase: any, args: any) {
+  if (args.action === "list") {
+    const { data, error } = await supabase.from("pipeline_stages").select("*").order("position");
+    if (error) return { error: error.message };
+    return { stages: data, count: data?.length || 0 };
+  }
+  if (args.action === "create") {
+    const { data: existing } = await supabase.from("pipeline_stages").select("position").order("position", { ascending: false }).limit(1);
+    const pos = args.position ?? ((existing?.[0]?.position || 0) + 1);
+    const { data, error } = await supabase.from("pipeline_stages").insert({ title: args.title, color: args.color || "border-slate-500", position: pos, is_active: true, ai_trigger_criteria: args.ai_trigger_criteria || null }).select().single();
+    if (error) return { error: error.message };
+    return { success: true, stage: data };
+  }
+  if (args.action === "update" && args.stage_id) {
+    const u: any = {};
+    if (args.title) u.title = args.title;
+    if (args.color) u.color = args.color;
+    if (args.position !== undefined) u.position = args.position;
+    if (args.is_active !== undefined) u.is_active = args.is_active;
+    if (args.ai_trigger_criteria !== undefined) u.ai_trigger_criteria = args.ai_trigger_criteria;
+    const { error } = await supabase.from("pipeline_stages").update(u).eq("id", args.stage_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Estágio atualizado" };
+  }
+  return { error: "Parâmetros inválidos" };
+}
+
+async function executeManageTeam(supabase: any, args: any) {
+  if (args.action === "list_members") {
+    const { data, error } = await supabase.from("team_members").select("*, team_functions(name)").order("created_at");
+    if (error) return { error: error.message };
+    return { members: data, count: data?.length || 0 };
+  }
+  if (args.action === "list_functions") {
+    const { data, error } = await supabase.from("team_functions").select("*").order("name");
+    if (error) return { error: error.message };
+    return { functions: data, count: data?.length || 0 };
+  }
+  if (args.action === "update_member" && args.member_id) {
+    const { error } = await supabase.from("team_members").update(args.updates).eq("id", args.member_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Membro atualizado" };
+  }
+  if (args.action === "update_function" && args.function_id) {
+    const { error } = await supabase.from("team_functions").update(args.updates).eq("id", args.function_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Função atualizada" };
+  }
+  if (args.action === "create_function") {
+    const { data, error } = await supabase.from("team_functions").insert({ name: args.updates?.name, description: args.updates?.description, is_active: true }).select().single();
+    if (error) return { error: error.message };
+    return { success: true, function: data };
+  }
+  return { error: "Ação inválida" };
 }
 
 async function executeSendWhatsAppMessage(supabase: any, args: any) {
   let phone = args.phone_number;
-  
   if (!phone && args.contact_name) {
-    const { data: contacts } = await supabase.from("contacts").select("phone_number, name").ilike("name", `%${args.contact_name}%`).limit(1);
-    if (!contacts?.length) return { error: `Contato "${args.contact_name}" não encontrado` };
-    phone = contacts[0].phone_number;
+    const { data } = await supabase.from("contacts").select("phone_number, name").ilike("name", `%${args.contact_name}%`).limit(1);
+    if (!data?.length) return { error: `Contato "${args.contact_name}" não encontrado` };
+    phone = data[0].phone_number;
   }
-  if (!phone) return { error: "Número de telefone ou nome do contato é necessário" };
-
-  // Get default instance
+  if (!phone) return { error: "Número ou nome do contato necessário" };
   const { data: instance } = await supabase.from("whatsapp_instances").select("*").eq("is_default", true).single();
   const { data: settings } = await supabase.from("nina_settings").select("evolution_api_url, evolution_api_key").limit(1).single();
-  
-  if (!instance || !settings?.evolution_api_url) return { error: "Instância WhatsApp não configurada" };
-
-  const cleanPhone = phone.replace(/\D/g, "");
+  if (!instance || !settings?.evolution_api_url) return { error: "WhatsApp não configurado" };
   try {
     const resp = await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: settings.evolution_api_key },
-      body: JSON.stringify({ number: cleanPhone, text: args.message }),
+      method: "POST", headers: { "Content-Type": "application/json", apikey: settings.evolution_api_key },
+      body: JSON.stringify({ number: phone.replace(/\D/g, ""), text: args.message }),
     });
-    const result = await resp.json();
-    if (!resp.ok) return { error: `Falha ao enviar: ${JSON.stringify(result)}` };
+    if (!resp.ok) return { error: `Falha: ${await resp.text()}` };
     return { success: true, message: `Mensagem enviada para ${phone}` };
-  } catch (e) {
-    return { error: `Erro de conexão: ${e.message}` };
-  }
+  } catch (e) { return { error: e.message }; }
 }
 
 async function executeSendBulkFollowup(supabase: any, args: any) {
-  const filter = args.filter || {};
+  const f = args.filter || {};
   let query = supabase.from("contacts").select("id, name, call_name, phone_number");
-  
-  if (filter.inactive_hours) {
-    const cutoff = new Date(Date.now() - filter.inactive_hours * 3600000).toISOString();
-    query = query.lt("last_activity", cutoff);
-  }
-  if (filter.lead_state) query = query.eq("lead_state", filter.lead_state);
-  if (filter.tags?.length) query = query.overlaps("tags", filter.tags);
-  
+  if (f.inactive_hours) query = query.lt("last_activity", new Date(Date.now() - f.inactive_hours * 3600000).toISOString());
+  if (f.lead_state) query = query.eq("lead_state", f.lead_state);
+  if (f.tags?.length) query = query.overlaps("tags", f.tags);
   const { data: contacts, error } = await query.limit(args.max_recipients || 10);
   if (error) return { error: error.message };
-  if (!contacts?.length) return { message: "Nenhum contato encontrado com os filtros aplicados", count: 0 };
+  if (!contacts?.length) return { message: "Nenhum contato encontrado", count: 0 };
 
   const { data: instance } = await supabase.from("whatsapp_instances").select("*").eq("is_default", true).single();
   const { data: settings } = await supabase.from("nina_settings").select("evolution_api_url, evolution_api_key").limit(1).single();
-  
-  if (!instance || !settings?.evolution_api_url) return { error: "Instância WhatsApp não configurada" };
+  if (!instance || !settings?.evolution_api_url) return { error: "WhatsApp não configurado" };
 
   const results: any[] = [];
-  for (const contact of contacts) {
-    const name = contact.call_name || contact.name || "Cliente";
+  for (const c of contacts) {
+    const name = c.call_name || c.name || "Cliente";
     const msg = args.message_template.replace(/\{name\}/g, name);
-    const cleanPhone = contact.phone_number.replace(/\D/g, "");
-    
     try {
       const resp = await fetch(`${settings.evolution_api_url}/message/sendText/${instance.instance_name}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: settings.evolution_api_key },
-        body: JSON.stringify({ number: cleanPhone, text: msg }),
+        method: "POST", headers: { "Content-Type": "application/json", apikey: settings.evolution_api_key },
+        body: JSON.stringify({ number: c.phone_number.replace(/\D/g, ""), text: msg }),
       });
-      results.push({ contact: name, phone: contact.phone_number, status: resp.ok ? "enviado" : "falhou" });
-      // Small delay between messages
+      results.push({ contact: name, phone: c.phone_number, status: resp.ok ? "enviado" : "falhou" });
       await new Promise(r => setTimeout(r, 2000));
-    } catch (e) {
-      results.push({ contact: name, phone: contact.phone_number, status: "erro", error: e.message });
-    }
+    } catch (e) { results.push({ contact: name, phone: c.phone_number, status: "erro" }); }
   }
-  
   return { total: contacts.length, results };
 }
 
-async function executeCheckInventory(supabase: any, args: any) {
-  let query = supabase.from("inventory").select("*").eq("is_active", true);
-  if (args.product_name) query = query.ilike("product_name", `%${args.product_name}%`);
-  if (args.low_stock_only) query = query.raw("quantity <= min_quantity");
-  
-  const { data, error } = await query.order("product_name");
-  if (error) return { error: error.message };
-  
-  if (args.low_stock_only && data) {
-    const lowStock = data.filter((i: any) => i.quantity <= i.min_quantity);
-    return { products: lowStock, count: lowStock.length };
+async function executeManageInventory(supabase: any, args: any) {
+  if (args.action === "list") {
+    let query = supabase.from("inventory").select("*").eq("is_active", true);
+    if (args.product_name) query = query.ilike("product_name", `%${args.product_name}%`);
+    const { data, error } = await query.order("product_name");
+    if (error) return { error: error.message };
+    const items = args.low_stock_only ? data?.filter((i: any) => i.quantity <= i.min_quantity) : data;
+    return { products: items, count: items?.length || 0 };
   }
-  return { products: data, count: data?.length || 0 };
+  if (args.action === "create") {
+    const { data, error } = await supabase.from("inventory").insert(args.updates).select().single();
+    if (error) return { error: error.message };
+    return { success: true, product: data };
+  }
+  if (args.action === "update") {
+    let id = args.product_id;
+    if (!id && args.product_name) {
+      const { data } = await supabase.from("inventory").select("id").ilike("product_name", `%${args.product_name}%`).limit(1);
+      if (!data?.length) return { error: "Produto não encontrado" };
+      id = data[0].id;
+    }
+    const { error } = await supabase.from("inventory").update({ ...args.updates, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Produto atualizado" };
+  }
+  if (args.action === "add_stock" || args.action === "remove_stock") {
+    let id = args.product_id;
+    if (!id && args.product_name) {
+      const { data } = await supabase.from("inventory").select("id, quantity").ilike("product_name", `%${args.product_name}%`).limit(1);
+      if (!data?.length) return { error: "Produto não encontrado" };
+      id = data[0].id;
+    }
+    const qty = args.movement_quantity || 0;
+    const type = args.action === "add_stock" ? "in" : "out";
+    const { error: movErr } = await supabase.from("inventory_movements").insert({ inventory_id: id, type, quantity: qty, reason: args.movement_reason || "Ajuste manual via assistente", created_by: "ai-assistant" });
+    if (movErr) return { error: movErr.message };
+    // Update quantity
+    const { data: prod } = await supabase.from("inventory").select("quantity").eq("id", id).single();
+    const newQty = type === "in" ? (prod?.quantity || 0) + qty : Math.max(0, (prod?.quantity || 0) - qty);
+    await supabase.from("inventory").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", id);
+    return { success: true, message: `${type === "in" ? "Entrada" : "Saída"} de ${qty} unidades registrada. Novo estoque: ${newQty}` };
+  }
+  return { error: "Ação inválida" };
 }
 
-async function executeListAppointments(supabase: any, args: any) {
-  let query = supabase.from("appointments").select("*, contacts(name, phone_number)");
-  if (args.date_from) query = query.gte("date", args.date_from);
-  if (args.date_to) query = query.lte("date", args.date_to);
-  if (args.status) query = query.eq("status", args.status);
-  
-  const { data, error } = await query.order("date").order("time").limit(20);
-  if (error) return { error: error.message };
-  return { appointments: data, count: data?.length || 0 };
+async function executeManageAppointments(supabase: any, args: any) {
+  if (args.action === "list") {
+    let query = supabase.from("appointments").select("*, contacts(name, phone_number)");
+    if (args.date_from) query = query.gte("date", args.date_from);
+    if (args.date_to) query = query.lte("date", args.date_to);
+    if (args.status) query = query.eq("status", args.status);
+    const { data, error } = await query.order("date").order("time").limit(20);
+    if (error) return { error: error.message };
+    return { appointments: data, count: data?.length || 0 };
+  }
+  if (args.action === "create") {
+    const d = args.new_data;
+    let contactId = null;
+    if (d?.contact_name) {
+      const { data: c } = await supabase.from("contacts").select("id").ilike("name", `%${d.contact_name}%`).limit(1);
+      if (c?.length) contactId = c[0].id;
+    }
+    const { data, error } = await supabase.from("appointments").insert({
+      title: d?.title || "Reunião", date: d?.date, time: d?.time || "10:00",
+      duration: d?.duration || 60, description: d?.description, contact_id: contactId,
+    }).select().single();
+    if (error) return { error: error.message };
+    return { success: true, appointment: data };
+  }
+  if (args.action === "update" && args.appointment_id) {
+    const { error } = await supabase.from("appointments").update(args.new_data).eq("id", args.appointment_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Agendamento atualizado" };
+  }
+  if (args.action === "cancel" && args.appointment_id) {
+    const { error } = await supabase.from("appointments").update({ status: "cancelled" }).eq("id", args.appointment_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Agendamento cancelado" };
+  }
+  return { error: "Ação inválida" };
 }
 
-async function executeQueryConversations(supabase: any, args: any) {
-  let query = supabase.from("conversations").select("id, status, last_message_at, is_active, tags, contacts(name, phone_number)");
-  
-  if (args.status) query = query.eq("status", args.status);
-  if (args.unanswered_hours) {
-    const cutoff = new Date(Date.now() - args.unanswered_hours * 3600000).toISOString();
-    query = query.lt("last_message_at", cutoff).eq("is_active", true);
+async function executeManageConversations(supabase: any, args: any) {
+  if (args.action === "list") {
+    let query = supabase.from("conversations").select("id, status, last_message_at, is_active, tags, assigned_team, contacts(name, phone_number, lead_state)");
+    if (args.status) query = query.eq("status", args.status);
+    if (args.unanswered_hours) query = query.lt("last_message_at", new Date(Date.now() - args.unanswered_hours * 3600000).toISOString()).eq("is_active", true);
+    if (args.contact_name) {
+      const { data: c } = await supabase.from("contacts").select("id").ilike("name", `%${args.contact_name}%`);
+      if (c?.length) query = query.in("contact_id", c.map((x: any) => x.id));
+    }
+    const { data, error } = await query.order("last_message_at", { ascending: false }).limit(args.limit || 20);
+    if (error) return { error: error.message };
+    return { conversations: data, count: data?.length || 0 };
   }
-  if (args.contact_name) {
-    const { data: contacts } = await supabase.from("contacts").select("id").ilike("name", `%${args.contact_name}%`);
-    if (contacts?.length) query = query.in("contact_id", contacts.map((c: any) => c.id));
+  if (args.action === "get_messages" && args.conversation_id) {
+    const { data, error } = await supabase.from("messages").select("content, from_type, type, sent_at, media_type").eq("conversation_id", args.conversation_id).order("sent_at", { ascending: false }).limit(args.limit || 30);
+    if (error) return { error: error.message };
+    return { messages: data?.reverse(), count: data?.length || 0 };
   }
-  
-  const { data, error } = await query.order("last_message_at", { ascending: false }).limit(args.limit || 20);
-  if (error) return { error: error.message };
-  return { conversations: data, count: data?.length || 0 };
+  if (args.action === "update_status" && args.conversation_id && args.new_status) {
+    const { error } = await supabase.from("conversations").update({ status: args.new_status, updated_at: new Date().toISOString() }).eq("id", args.conversation_id);
+    if (error) return { error: error.message };
+    return { success: true, message: `Conversa atualizada para "${args.new_status}"` };
+  }
+  return { error: "Ação inválida" };
+}
+
+async function executeManageAutomations(supabase: any, args: any) {
+  if (args.action === "list") {
+    const { data, error } = await supabase.from("automations").select("*").order("created_at", { ascending: false });
+    if (error) return { error: error.message };
+    return { automations: data, count: data?.length || 0 };
+  }
+  if (args.action === "create" && args.new_data) {
+    const { data, error } = await supabase.from("automations").insert(args.new_data).select().single();
+    if (error) return { error: error.message };
+    return { success: true, automation: data };
+  }
+  if (args.action === "toggle" && args.automation_id) {
+    const { data: a } = await supabase.from("automations").select("is_active").eq("id", args.automation_id).single();
+    const { error } = await supabase.from("automations").update({ is_active: !a?.is_active }).eq("id", args.automation_id);
+    if (error) return { error: error.message };
+    return { success: true, message: `Automação ${!a?.is_active ? "ativada" : "desativada"}` };
+  }
+  if (args.action === "delete" && args.automation_id) {
+    const { error } = await supabase.from("automations").delete().eq("id", args.automation_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Automação removida" };
+  }
+  return { error: "Ação inválida" };
+}
+
+async function executeManageMaterials(supabase: any, args: any) {
+  if (args.action === "list") {
+    let query = supabase.from("official_materials").select("id, titulo, tipo, linha_negocio, produto_relacionado, status, versao, arquivo_url, data_publicacao, tags");
+    if (args.search_term) query = query.or(`titulo.ilike.%${args.search_term}%,produto_relacionado.ilike.%${args.search_term}%`);
+    if (args.linha_negocio) query = query.eq("linha_negocio", args.linha_negocio);
+    const { data, error } = await query.eq("status", "ativo").order("created_at", { ascending: false }).limit(args.limit || 20);
+    if (error) return { error: error.message };
+    return { materials: data, count: data?.length || 0 };
+  }
+  if (args.action === "list_send_logs") {
+    const { data, error } = await supabase.from("material_send_logs").select("*, contacts(name), official_materials(titulo)").order("created_at", { ascending: false }).limit(args.limit || 20);
+    if (error) return { error: error.message };
+    return { logs: data, count: data?.length || 0 };
+  }
+  return { error: "Ação inválida" };
+}
+
+async function executeManageNinaSettings(supabase: any, args: any) {
+  if (args.action === "get") {
+    const { data, error } = await supabase.from("nina_settings").select("company_name, sdr_name, is_active, auto_response_enabled, business_hours_start, business_hours_end, business_days, response_delay_min, response_delay_max, message_breaking_enabled, ai_scheduling_enabled, ai_provider, ai_model_name, adaptive_response_enabled, audio_response_enabled, timezone").limit(1).single();
+    if (error) return { error: error.message };
+    return { settings: data };
+  }
+  if (args.action === "update") {
+    const { error } = await supabase.from("nina_settings").update({ ...args.updates, updated_at: new Date().toISOString() }).not("id", "is", null);
+    if (error) return { error: error.message };
+    return { success: true, message: "Configurações atualizadas" };
+  }
+  return { error: "Ação inválida" };
+}
+
+async function executeManageKnowledgeBase(supabase: any, args: any) {
+  if (args.action === "list_files") {
+    const { data, error } = await supabase.from("knowledge_files").select("*").order("created_at", { ascending: false }).limit(args.limit || 20);
+    if (error) return { error: error.message };
+    return { files: data, count: data?.length || 0 };
+  }
+  if (args.action === "search_chunks" && args.search_term) {
+    const { data, error } = await supabase.from("knowledge_chunks").select("id, content, category, chunk_index, usage_count, file_id, knowledge_files(file_name)").ilike("content", `%${args.search_term}%`).limit(args.limit || 10);
+    if (error) return { error: error.message };
+    return { chunks: data, count: data?.length || 0 };
+  }
+  if (args.action === "list_suggestions") {
+    let query = supabase.from("knowledge_suggestions").select("*");
+    if (args.status) query = query.eq("status", args.status);
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(args.limit || 20);
+    if (error) return { error: error.message };
+    return { suggestions: data, count: data?.length || 0 };
+  }
+  return { error: "Ação inválida" };
+}
+
+async function executeManageBroadcasts(supabase: any, args: any) {
+  if (args.action === "list_campaigns") {
+    const { data, error } = await supabase.from("broadcast_campaigns").select("id, name, status, total_recipients, sent_count, failed_count, created_at, started_at, completed_at").order("created_at", { ascending: false }).limit(args.limit || 20);
+    if (error) return { error: error.message };
+    return { campaigns: data, count: data?.length || 0 };
+  }
+  if (args.action === "get_campaign_details" && args.campaign_id) {
+    const { data: campaign } = await supabase.from("broadcast_campaigns").select("*").eq("id", args.campaign_id).single();
+    const { data: recipients } = await supabase.from("broadcast_recipients").select("phone_number, status, error_message, sent_at").eq("campaign_id", args.campaign_id).limit(50);
+    return { campaign, recipients, recipients_count: recipients?.length || 0 };
+  }
+  return { error: "Ação inválida" };
 }
 
 async function executeGetSystemStats(supabase: any) {
-  const [contacts, deals, conversations, inventory, appointments] = await Promise.all([
+  const [contacts, deals, conversations, inventory, appointments, leadStates, stageStats] = await Promise.all([
     supabase.from("contacts").select("id", { count: "exact", head: true }),
     supabase.from("deals").select("id", { count: "exact", head: true }),
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("is_active", true),
     supabase.from("inventory").select("id, quantity, min_quantity").eq("is_active", true),
     supabase.from("appointments").select("id", { count: "exact", head: true }).eq("status", "scheduled"),
+    supabase.from("contacts").select("lead_state"),
+    supabase.from("deals").select("stage_id, pipeline_stages(title)"),
   ]);
-  
   const lowStock = inventory.data?.filter((i: any) => i.quantity <= i.min_quantity)?.length || 0;
-  
+  // Count leads by state
+  const leadsByState: Record<string, number> = {};
+  leadStates.data?.forEach((c: any) => { leadsByState[c.lead_state || 'UNKNOWN'] = (leadsByState[c.lead_state || 'UNKNOWN'] || 0) + 1; });
+  // Count deals by stage
+  const dealsByStage: Record<string, number> = {};
+  stageStats.data?.forEach((d: any) => { const s = d.pipeline_stages?.title || 'Sem estágio'; dealsByStage[s] = (dealsByStage[s] || 0) + 1; });
+
   return {
     total_contacts: contacts.count || 0,
     total_deals: deals.count || 0,
@@ -346,51 +845,141 @@ async function executeGetSystemStats(supabase: any) {
     scheduled_appointments: appointments.count || 0,
     low_stock_items: lowStock,
     total_inventory_items: inventory.data?.length || 0,
+    leads_by_state: leadsByState,
+    deals_by_stage: dealsByStage,
   };
 }
 
-async function executeTool(supabase: any, name: string, args: any): Promise<any> {
-  switch (name) {
-    case "query_contacts": return executeQueryContacts(supabase, args);
-    case "query_deals": return executeQueryDeals(supabase, args);
-    case "update_deal_stage": return executeUpdateDealStage(supabase, args);
-    case "send_whatsapp_message": return executeSendWhatsAppMessage(supabase, args);
-    case "send_bulk_followup": return executeSendBulkFollowup(supabase, args);
-    case "check_inventory": return executeCheckInventory(supabase, args);
-    case "list_appointments": return executeListAppointments(supabase, args);
-    case "query_conversations": return executeQueryConversations(supabase, args);
-    case "get_system_stats": return executeGetSystemStats(supabase);
-    default: return { error: `Tool "${name}" não encontrada` };
-  }
+async function executeQueryAuditLogs(supabase: any, args: any) {
+  let query = supabase.from("audit_logs").select("*");
+  if (args.entity_type) query = query.eq("entity_type", args.entity_type);
+  if (args.action) query = query.eq("action", args.action);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(args.limit || 20);
+  if (error) return { error: error.message };
+  return { logs: data, count: data?.length || 0 };
 }
 
-const SYSTEM_PROMPT = `Você é o Assistente IA interno do sistema CRM/SDR. Você tem acesso completo ao banco de dados e pode executar ações no sistema.
+async function executeManageWhatsAppInstances(supabase: any, args: any) {
+  if (args.action === "list") {
+    const { data, error } = await supabase.from("whatsapp_instances").select("*").order("created_at");
+    if (error) return { error: error.message };
+    return { instances: data, count: data?.length || 0 };
+  }
+  if (args.action === "check_status") {
+    const { data: instances } = await supabase.from("whatsapp_instances").select("*");
+    const { data: settings } = await supabase.from("nina_settings").select("evolution_api_url, evolution_api_key").limit(1).single();
+    if (!settings?.evolution_api_url) return { error: "Evolution API não configurada" };
+    const results: any[] = [];
+    for (const inst of instances || []) {
+      try {
+        const resp = await fetch(`${settings.evolution_api_url}/instance/connectionState/${inst.instance_name}`, {
+          headers: { apikey: settings.evolution_api_key },
+        });
+        const data = await resp.json();
+        results.push({ name: inst.instance_name, is_default: inst.is_default, status: data?.instance?.state || "unknown" });
+      } catch { results.push({ name: inst.instance_name, status: "error" }); }
+    }
+    return { instances: results };
+  }
+  return { error: "Ação inválida" };
+}
 
-## Suas capacidades:
-- **Consultar contatos**: buscar por nome, telefone, estado, atividade
-- **Consultar deals/pipeline**: ver negócios, filtrar por estágio, valor, prioridade
-- **Mover deals**: alterar estágio no pipeline
-- **Enviar mensagens WhatsApp**: enviar para contatos individuais
-- **Follow-up em massa**: enviar mensagens para múltiplos contatos filtrados
-- **Consultar estoque**: ver produtos, quantidades, alertas de estoque baixo
-- **Ver agendamentos**: listar reuniões e compromissos
-- **Consultar conversas**: ver conversas ativas, sem resposta, por status
-- **Estatísticas do sistema**: visão geral de contatos, deals, conversas
+async function executeTool(supabase: any, name: string, args: any): Promise<any> {
+  const map: Record<string, Function> = {
+    query_contacts: executeQueryContacts,
+    update_contact: executeUpdateContact,
+    query_deals: executeQueryDeals,
+    update_deal: executeUpdateDeal,
+    manage_pipeline_stages: executeManagePipelineStages,
+    manage_team: executeManageTeam,
+    send_whatsapp_message: executeSendWhatsAppMessage,
+    send_bulk_followup: executeSendBulkFollowup,
+    manage_inventory: executeManageInventory,
+    manage_appointments: executeManageAppointments,
+    manage_conversations: executeManageConversations,
+    manage_automations: executeManageAutomations,
+    manage_materials: executeManageMaterials,
+    manage_nina_settings: executeManageNinaSettings,
+    manage_knowledge_base: executeManageKnowledgeBase,
+    manage_broadcasts: executeManageBroadcasts,
+    get_system_stats: executeGetSystemStats,
+    query_audit_logs: executeQueryAuditLogs,
+    manage_whatsapp_instances: executeManageWhatsAppInstances,
+  };
+  const fn = map[name];
+  if (!fn) return { error: `Tool "${name}" não encontrada` };
+  return fn(supabase, args);
+}
 
-## Regras:
-1. Sempre use as tools disponíveis para buscar dados reais — nunca invente dados
-2. Para ações destrutivas ou envios em massa, CONFIRME com o operador antes de executar
-3. Apresente os dados de forma clara e organizada usando markdown (tabelas, listas)
-4. Ao enviar mensagens, mostre claramente para quem foi enviado e o conteúdo
-5. Use linguagem profissional mas amigável em português brasileiro
-6. Se não encontrar dados, informe claramente e sugira alternativas
-7. Quando mostrar contatos ou deals, inclua informações relevantes como telefone, status, valor
+const SYSTEM_PROMPT = `Você é o Assistente IA interno — o centro de comando do sistema CRM/SDR. Você tem acesso COMPLETO ao banco de dados e pode executar QUALQUER ação no sistema.
 
-## Formato de resposta:
-- Use **negrito** para destacar informações importantes
-- Use tabelas markdown para listas de dados
-- Use ✅ ❌ ⚠️ para indicar status de ações
-- Seja conciso mas completo`;
+## Suas capacidades completas:
+
+### 📇 Contatos
+- Buscar, filtrar e atualizar contatos (nome, email, tags, lead_state, empresa, cargo, etc)
+- Bloquear/desbloquear contatos
+- Ver resumo vivo e notas de cada contato
+
+### 📊 Pipeline / Deals
+- Consultar deals por estágio, valor, prioridade, contato
+- Mover deals entre estágios
+- Atualizar valor, prioridade, tags, notas
+- Marcar como ganho ou perdido (com motivo)
+- Gerenciar estágios do pipeline (criar, editar, reordenar, definir critérios IA)
+
+### 👥 Equipe
+- Listar membros e suas funções (closer, SDR, etc)
+- Atualizar status, configurar recebimento de reuniões
+- Criar/editar funções da equipe
+
+### 💬 Conversas & WhatsApp
+- Buscar conversas por status, contato, tempo sem resposta
+- Ver histórico de mensagens de uma conversa
+- Alterar status (nina/human/waiting/closed)
+- Enviar mensagens WhatsApp individuais ou em massa (follow-up)
+- Ver status das instâncias WhatsApp
+
+### 📦 Estoque
+- Consultar produtos, preços, quantidades
+- Adicionar/remover estoque com movimentação registrada
+- Criar/editar produtos
+- Alertas de estoque baixo
+
+### 📅 Agendamentos
+- Listar, criar, atualizar ou cancelar reuniões
+- Filtrar por data e status
+
+### ⚡ Automações
+- Listar automações configuradas
+- Criar novas automações (follow-up, mudança de estado, etc)
+- Ativar/desativar automações
+
+### 📚 Base de Conhecimento
+- Listar arquivos da base
+- Buscar conteúdo nos chunks
+- Ver sugestões de conhecimento pendentes
+
+### 📡 Broadcasts
+- Listar campanhas e resultados
+- Ver detalhes de destinatários
+
+### ⚙️ Configurações Nina
+- Consultar/alterar: horário comercial, delays, modelo de IA, status ativo/inativo, nome da empresa
+
+### 📋 Auditoria
+- Consultar logs de alterações no sistema
+
+### 📊 Estatísticas
+- Visão geral completa: contatos, deals por estágio, leads por estado, conversas, estoque, agendamentos
+
+## Regras de comportamento:
+1. **SEMPRE** use as tools para dados reais — NUNCA invente dados
+2. Para ações destrutivas ou envios em massa, **CONFIRME** com o operador antes
+3. Apresente dados em **tabelas markdown** organizadas
+4. Use ✅ ❌ ⚠️ 📊 📇 para indicar status
+5. Seja proativo: ao mostrar problemas, sugira soluções
+6. Português brasileiro, profissional mas amigável
+7. Se algo falhar, explique e sugira alternativas`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -404,9 +993,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Get configured model
     const { data: settings } = await supabase.from("nina_settings").select("ai_provider, ai_model_name").limit(1).single();
@@ -418,16 +1005,11 @@ serve(async (req) => {
       else model = `google/${m}`;
     }
 
-    // Conversation with tool calling loop
-    let conversationMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      ...messages,
-    ];
-
-    const MAX_TOOL_ROUNDS = 5;
+    let conversationMessages: any[] = [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
+    const MAX_ROUNDS = 8;
     let finalContent = "";
 
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    for (let round = 0; round < MAX_ROUNDS; round++) {
       const response = await fetch(LOVABLE_GATEWAY, {
         method: "POST",
         headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
@@ -435,57 +1017,35 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        const status = response.status;
-        const errText = await response.text();
-        console.error(`AI gateway error (${status}):`, errText);
-        if (status === 429) return new Response(JSON.stringify({ error: "Rate limit exceeded. Tente novamente em alguns segundos." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        if (status === 402) return new Response(JSON.stringify({ error: "Créditos insuficientes. Adicione créditos no workspace." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        throw new Error(`AI error: ${status}`);
+        const s = response.status;
+        if (s === 429) return new Response(JSON.stringify({ error: "Rate limit. Tente em alguns segundos." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (s === 402) return new Response(JSON.stringify({ error: "Créditos insuficientes." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        throw new Error(`AI error: ${s}`);
       }
 
       const data = await response.json();
       const choice = data.choices?.[0];
-      if (!choice) throw new Error("No response from AI");
+      if (!choice) throw new Error("No response");
 
-      const assistantMsg = choice.message;
-      conversationMessages.push(assistantMsg);
+      const msg = choice.message;
+      conversationMessages.push(msg);
 
-      // If no tool calls, we're done
-      if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-        finalContent = assistantMsg.content || "";
-        break;
+      if (!msg.tool_calls?.length) { finalContent = msg.content || ""; break; }
+
+      for (const tc of msg.tool_calls) {
+        let args = {};
+        try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
+        console.log(`Tool: ${tc.function.name}`, JSON.stringify(args).substring(0, 200));
+        const result = await executeTool(supabase, tc.function.name, args);
+        conversationMessages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
       }
 
-      // Execute all tool calls
-      for (const toolCall of assistantMsg.tool_calls) {
-        const fnName = toolCall.function.name;
-        let fnArgs = {};
-        try { fnArgs = JSON.parse(toolCall.function.arguments || "{}"); } catch {}
-        
-        console.log(`Executing tool: ${fnName}`, fnArgs);
-        const result = await executeTool(supabase, fnName, fnArgs);
-        
-        conversationMessages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        });
-      }
-
-      // If last round and still calling tools, force a text response
-      if (round === MAX_TOOL_ROUNDS - 1) {
-        finalContent = assistantMsg.content || "Processamento concluído. Verifique os resultados acima.";
-      }
+      if (round === MAX_ROUNDS - 1) finalContent = msg.content || "Processamento concluído.";
     }
 
-    return new Response(JSON.stringify({ content: finalContent }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ content: finalContent }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("ai-assistant error:", e);
-    return new Response(JSON.stringify({ error: e.message || "Erro interno" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: e.message || "Erro interno" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
