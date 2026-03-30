@@ -213,6 +213,54 @@ const updateDealStageTool = {
   }
 };
 
+// Tool definition for checking inventory
+const checkInventoryTool = {
+  type: "function",
+  function: {
+    name: "check_inventory",
+    description: "Consultar o estoque de produtos. Use quando o cliente perguntar sobre disponibilidade, preço, ou produtos disponíveis. Pode buscar por nome, SKU ou categoria.",
+    parameters: {
+      type: "object",
+      properties: {
+        search: {
+          type: "string",
+          description: "Termo de busca: nome do produto, SKU ou categoria (ex: 'colágeno', 'VET-001', 'veterinario')"
+        }
+      },
+      required: ["search"],
+      additionalProperties: false
+    }
+  }
+};
+
+// Tool definition for reserving inventory (sale)
+const reserveInventoryTool = {
+  type: "function",
+  function: {
+    name: "reserve_inventory",
+    description: "Reservar/dar saída de estoque quando o cliente confirmar um pedido. Registra a movimentação e atualiza a quantidade. IMPORTANTE: só use após confirmação explícita do cliente.",
+    parameters: {
+      type: "object",
+      properties: {
+        product_name: {
+          type: "string",
+          description: "Nome exato do produto (como retornado por check_inventory)"
+        },
+        quantity: {
+          type: "number",
+          description: "Quantidade a reservar"
+        },
+        reason: {
+          type: "string",
+          description: "Motivo da reserva (ex: 'Venda confirmada pelo cliente')"
+        }
+      },
+      required: ["product_name", "quantity"],
+      additionalProperties: false
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
