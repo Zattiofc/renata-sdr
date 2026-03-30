@@ -11,6 +11,7 @@ import Scheduling from './components/Scheduling';
 import Kanban from './components/Kanban';
 import Materials from './components/Materials';
 import Automations from './pages/Automations';
+import Inventory from './pages/Inventory';
 import Auth from './pages/Auth';
 
 import SetPassword from './pages/SetPassword';
