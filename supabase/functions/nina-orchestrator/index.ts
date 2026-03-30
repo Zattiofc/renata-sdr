@@ -1913,6 +1913,46 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
 
   }
 
+  // ===== SECOND AI PASS: If tool results need to be processed by AI =====
+  if (toolResultsForSecondPass.length > 0) {
+    console.log(`[Nina] Running second AI pass with ${toolResultsForSecondPass.length} tool results`);
+    
+    // Build tool results as assistant context for a follow-up AI call
+    const toolResultsSummary = toolResultsForSecondPass
+      .map(tr => `[Resultado de ${tr.name}]: ${tr.result}`)
+      .join('\n\n');
+    
+    try {
+      const secondPassMessages = [
+        { role: 'system' as const, content: finalPrompt + '\n\nIMPORTANTE: Responda ao cliente de forma NATURAL usando os dados das ferramentas. NUNCA inclua tags como [INVENTORY_CONTEXT], [INVENTORY_ERROR], <inventory_context> ou qualquer marcador interno na resposta. Apresente as informações de forma conversacional e amigável.' },
+        ...conversationHistory,
+        // Add the AI's first response if it had content
+        ...(aiContent ? [{ role: 'assistant' as const, content: aiContent }] : []),
+        // Add tool results as a system message
+        { role: 'user' as const, content: `[SISTEMA INTERNO - NÃO REPRODUZA ESTAS TAGS]\nResultados das ferramentas executadas:\n${toolResultsSummary}\n\nAgora responda ao cliente de forma natural usando estas informações. NÃO inclua tags, marcadores ou prefixos internos.` }
+      ];
+
+      const secondResponse = await callAI(aiConfig, {
+        messages: secondPassMessages,
+        temperature: 0.7,
+        max_tokens: 800,
+      });
+
+      if (secondResponse.ok) {
+        const secondData = await secondResponse.json();
+        const secondContent = secondData.choices?.[0]?.message?.content;
+        if (secondContent && secondContent.trim()) {
+          aiContent = secondContent;
+          console.log('[Nina] Second pass response generated successfully');
+        }
+      } else {
+        console.error('[Nina] Second pass AI call failed:', secondResponse.status);
+      }
+    } catch (secondPassError) {
+      console.error('[Nina] Error in second AI pass:', secondPassError);
+    }
+  }
+
   // If no content and we only got tool calls, generate deterministic confirmations (never generic)
   if (!aiContent && toolCalls.length > 0) {
     if (appointmentCreated && !appointmentCreated.error) {
@@ -1960,6 +2000,9 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
     console.warn('[Nina] Using deterministic contextual fallback response');
     aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact);
   }
+
+  // ===== SANITIZE: Strip any internal tags that may have leaked =====
+  aiContent = sanitizeResponseForClient(aiContent);
 
   console.log('[Nina] Final response length:', aiContent.length);
 
