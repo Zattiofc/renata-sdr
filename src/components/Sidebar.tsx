@@ -16,6 +16,7 @@ const menuItems = [
   { id: 'contacts', label: 'Contatos', icon: Users },
   { id: 'materials', label: 'Materiais', icon: FileText },
   { id: 'scheduling', label: 'Agendamentos', icon: Calendar },
+  { id: 'automations', label: 'Automações', icon: Zap },
   { id: 'team', label: 'Equipe', icon: ShieldCheck },
   { id: 'settings', label: 'Configurações', icon: SettingsIcon },
 ];
