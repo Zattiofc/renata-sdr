@@ -79,7 +79,15 @@ serve(async (req) => {
       .limit(1)
       .single();
 
-    const configuredModel = ninaSettings?.ai_model_name || 'google/gemini-2.5-flash';
+    // Normalize model name to include provider prefix
+    let configuredModel = ninaSettings?.ai_model_name || 'google/gemini-2.5-flash';
+    if (configuredModel && !configuredModel.includes('/')) {
+      if (configuredModel.startsWith('gpt-') || configuredModel.startsWith('o1') || configuredModel.startsWith('o3') || configuredModel.startsWith('o4')) {
+        configuredModel = `openai/${configuredModel}`;
+      } else if (configuredModel.startsWith('gemini')) {
+        configuredModel = `google/${configuredModel}`;
+      }
+    }
 
     // Use AI to structure the data
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
