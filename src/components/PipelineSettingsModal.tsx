@@ -343,19 +343,13 @@ export function PipelineSettingsModal({ open, onClose, onSave }: PipelineSetting
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        {stage.isSystem ? (
-                          <Button size="sm" variant="ghost" disabled title="Etapa de sistema não pode ser deletada">
-                            <Lock className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteClick(stage)}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteClick(stage)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
                       </>
                     )}
                   </div>
