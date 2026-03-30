@@ -97,18 +97,7 @@ serve(async (req) => {
 
     console.log(`[import-inventory] Using AI model: ${configuredModel}`);
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: configuredModel,
-        messages: [
-          {
-            role: 'system',
-            content: `Você é um assistente que analisa planilhas de estoque e extrai produtos estruturados.
+    const systemPrompt = `Você é um assistente que analisa planilhas de estoque e extrai produtos estruturados.
 
 IMPORTANTE: Responda APENAS com um JSON array válido, sem markdown, sem \`\`\`, sem texto antes ou depois.
 
@@ -124,38 +113,85 @@ Cada item deve ter:
 
 Analise TODAS as linhas da planilha. Identifique padrões de colunas automaticamente.
 Se houver preços em formato brasileiro (R$ 1.234,56), converta para número.
-Ignore linhas de cabeçalho, totais, ou linhas vazias.`
-          },
-          {
-            role: 'user',
-            content: `Analise esta planilha e extraia todos os produtos:\n\n${rawContent}`
-          }
-        ],
-        temperature: 0.1,
-        ...(configuredModel.startsWith('openai/') ? { max_completion_tokens: 4000 } : { max_tokens: 4000 }),
-      }),
+Ignore linhas de cabeçalho, totais, ou linhas vazias.`;
+
+    const buildRequestBody = (model: string) => ({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Analise esta planilha e extraia todos os produtos:\n\n${rawContent}` }
+      ],
+      ...(model.startsWith('openai/')
+        ? { max_completion_tokens: 4096 }
+        : { temperature: 0.1, max_tokens: 4096 }),
+    });
+
+    let aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(buildRequestBody(configuredModel)),
     });
 
     if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error('[import-inventory] AI error:', errText);
-      return new Response(JSON.stringify({ error: 'AI analysis failed' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const primaryErrText = await aiResponse.text();
+      console.error('[import-inventory] AI error (primary model):', primaryErrText);
+
+      const fallbackModel = 'google/gemini-3-flash-preview';
+      if (configuredModel !== fallbackModel) {
+        console.log(`[import-inventory] Retrying with fallback model: ${fallbackModel}`);
+        aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${lovableApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildRequestBody(fallbackModel)),
+        });
+      }
+
+      if (!aiResponse.ok) {
+        const fallbackErrText = await aiResponse.text();
+        console.error('[import-inventory] AI error (fallback model):', fallbackErrText);
+        return new Response(
+          JSON.stringify({ error: 'AI analysis failed', details: fallbackErrText || primaryErrText }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     const aiData = await aiResponse.json();
-    let aiContent = aiData.choices?.[0]?.message?.content || '';
-    
+    const messageContent = aiData?.choices?.[0]?.message?.content;
+
+    let aiContent = '';
+    if (typeof messageContent === 'string') {
+      aiContent = messageContent;
+    } else if (Array.isArray(messageContent)) {
+      aiContent = messageContent
+        .map((part: any) => (typeof part === 'string' ? part : part?.text || ''))
+        .join('\n');
+    }
+
+    if (!aiContent && typeof aiData?.output_text === 'string') {
+      aiContent = aiData.output_text;
+    }
+
     // Clean markdown wrapping if present
     aiContent = aiContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    
+
     console.log(`[import-inventory] AI response length: ${aiContent.length}`);
 
     let products: any[];
     try {
       products = JSON.parse(aiContent);
-    } catch (parseErr) {
+    } catch (_parseErr) {
       console.error('[import-inventory] Failed to parse AI response:', aiContent.substring(0, 500));
-      return new Response(JSON.stringify({ error: 'Failed to parse AI response', raw: aiContent.substring(0, 200) }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(
+        JSON.stringify({ error: 'Failed to parse AI response', raw: aiContent.substring(0, 500), ai_shape: typeof aiData }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     if (!Array.isArray(products) || products.length === 0) {
