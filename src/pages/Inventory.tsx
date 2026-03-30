@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const Inventory: React.FC = () => {
   const { items, isLoading, movements, createItem, updateItem, deleteItem, addMovement, lowStockItems, totalProducts, totalValue } = useInventory();
