@@ -1421,6 +1421,53 @@ ${knowledgeContext}
     console.error('[Nina] RAG error (non-fatal):', ragError);
   }
 
+  // === PIPELINE STAGE CONTEXT: Inject stage info for AI to move deals ===
+  try {
+    const { data: pipelineStages } = await supabase
+      .from('pipeline_stages')
+      .select('title, position, ai_trigger_criteria, is_ai_managed')
+      .eq('is_active', true)
+      .order('position', { ascending: true });
+    
+    if (pipelineStages?.length) {
+      // Get current deal stage
+      const { data: currentDeal } = await supabase
+        .from('deals')
+        .select('stage_id, pipeline_stages!inner(title, position)')
+        .eq('contact_id', conversation.contact_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      const currentStageName = (currentDeal as any)?.pipeline_stages?.title || 'Novo Contato';
+      
+      const stagesInfo = pipelineStages
+        .map((s: any) => {
+          const current = s.title === currentStageName ? ' ← ESTÁGIO ATUAL' : '';
+          const criteria = s.ai_trigger_criteria ? `\n     Critérios para mover para cá: ${s.ai_trigger_criteria}` : '';
+          return `  ${s.position + 1}. ${s.title}${current}${criteria}`;
+        })
+        .join('\n');
+      
+      finalPrompt += `\n\n<pipeline_context>
+PIPELINE DE VENDAS — Use a ferramenta update_deal_stage para mover o lead quando ele atender os critérios:
+${stagesInfo}
+
+REGRA: Avalie CADA resposta do cliente e mova automaticamente para o estágio correto.
+Se o cliente demonstrar interesse → "Em Qualificação"
+Se confirmar pedido → "Pedido Montado"  
+Se confirmar pagamento → "Aguardando Pagamento"
+Se enviar comprovante → "Pagamento Efetuado"
+Se desistir/não querer → "Perdido"
+Estágio atual do lead: ${currentStageName}
+</pipeline_context>`;
+      
+      console.log(`[Nina] Pipeline context injected: ${pipelineStages.length} stages, current: ${currentStageName}`);
+    }
+  } catch (pipeErr) {
+    console.error('[Nina] Pipeline context error (non-fatal):', pipeErr);
+  }
+
   // Debug: Log current date/time being used in prompt
   const nowBR = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   console.log('[Nina] Current date/time (BR):', nowBR);
