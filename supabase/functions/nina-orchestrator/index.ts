@@ -1863,10 +1863,10 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
           const summary = inventoryResults.map((p: any) =>
             `• ${p.product_name} (SKU: ${p.sku || 'N/A'}) — Qtd: ${p.quantity} ${p.unit} — R$ ${Number(p.price).toFixed(2)} — Cat: ${p.category}${p.quantity <= p.min_quantity ? ' ⚠️ ESTOQUE BAIXO' : ''}`
           ).join('\n');
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_CONTEXT]\n${summary}\n[/INVENTORY_CONTEXT]`;
+          toolResultsForSecondPass.push({ name: 'check_inventory', result: `Resultados do estoque:\n${summary}` });
           console.log(`[Nina] Inventory search "${searchTerm}" returned ${inventoryResults.length} results`);
         } else {
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_CONTEXT]\nNenhum produto encontrado para "${searchTerm}".\n[/INVENTORY_CONTEXT]`;
+          toolResultsForSecondPass.push({ name: 'check_inventory', result: `Nenhum produto encontrado para "${searchTerm}".` });
         }
       } catch (parseError) {
         console.error('[Nina] Error processing check_inventory:', parseError);
@@ -1887,9 +1887,9 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
           .single();
 
         if (!product) {
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_ERROR] Produto "${args.product_name}" não encontrado no estoque. [/INVENTORY_ERROR]`;
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Produto "${args.product_name}" não encontrado no estoque.` });
         } else if (product.quantity < args.quantity) {
-          aiContent = (aiContent || '') + `\n\n[INVENTORY_ERROR] Estoque insuficiente para "${args.product_name}". Disponível: ${product.quantity} ${product.unit}. [/INVENTORY_ERROR]`;
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Estoque insuficiente para "${args.product_name}". Disponível: ${product.quantity} ${product.unit}.` });
         } else {
           // Decrement
           await supabase.from('inventory').update({ quantity: product.quantity - args.quantity }).eq('id', product.id);
@@ -1903,6 +1903,7 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
             conversation_id: conversation.id,
             created_by: 'nina',
           });
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Reserva confirmada: ${args.quantity}x "${product.product_name}". Estoque restante: ${product.quantity - args.quantity} ${product.unit}.` });
           console.log(`[Nina] Reserved ${args.quantity} of "${product.product_name}" for contact ${conversation.contact_id}`);
         }
       } catch (parseError) {
