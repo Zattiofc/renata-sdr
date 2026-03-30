@@ -1532,7 +1532,7 @@ Estágio atual do lead: ${currentStageName}
   console.log('[Nina] Using AI config:', { provider: aiConfig.provider, model: aiConfig.model });
 
   // Build tools array - only add appointment tools if enabled
-  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool]; // Always available
+  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool, checkInventoryTool, reserveInventoryTool]; // Always available
   if (settings?.ai_scheduling_enabled !== false) {
     tools.push(createAppointmentTool);
     tools.push(rescheduleAppointmentTool);
