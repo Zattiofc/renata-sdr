@@ -18,6 +18,7 @@ const menuItems = [
   { id: 'scheduling', label: 'Agendamentos', icon: Calendar },
   { id: 'automations', label: 'Automações', icon: Zap },
   { id: 'inventory', label: 'Estoque', icon: Package },
+  { id: 'ai-assistant', label: 'Assistente IA', icon: Bot },
   { id: 'team', label: 'Equipe', icon: ShieldCheck },
   { id: 'settings', label: 'Configurações', icon: SettingsIcon },
 ];
