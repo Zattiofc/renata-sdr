@@ -1616,6 +1616,7 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
   let appointmentCreated = null;
   let appointmentRescheduled = null;
   let appointmentCancelled = null;
+  const toolResultsForSecondPass: { name: string; result: string }[] = [];
   
   for (const toolCall of toolCalls) {
     if (toolCall.function?.name === 'create_appointment') {
