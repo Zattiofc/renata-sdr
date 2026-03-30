@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.run-automations]
 verify_jwt = false
+
+[functions.import-inventory]
+verify_jwt = false
