@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAI, getAIConfigFromSettings } from "../_shared/ai-client.ts";
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,26 +54,10 @@ serve(async (req) => {
       console.log(`[ExtractDoc] CSV extracted: ${extractedText.length} chars`);
 
     } else if (normalizedType === "xlsx" || normalizedType === "xls") {
-      // XLSX: convert to text representation via AI Vision
+      // XLSX/XLS: direct structured extraction from workbook
       const buffer = await fileData.arrayBuffer();
-      const base64 = arrayBufferToBase64(buffer);
-      
-      // Get AI config
-      const { data: settings } = await supabase
-        .from("nina_settings")
-        .select("ai_provider, ai_api_key, ai_model_name")
-        .limit(1)
-        .maybeSingle();
-      const aiConfig = getAIConfigFromSettings(settings || {});
-
-      if (!aiConfig.apiKey) {
-        throw new Error("No AI provider configured for document extraction");
-      }
-
-      // Use AI to extract structured data from spreadsheet
-      // For XLSX, we send as a document and ask AI to extract text
-      extractedText = await extractWithAI(aiConfig, base64, file_name, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      console.log(`[ExtractDoc] XLSX extracted via AI: ${extractedText.length} chars`);
+      extractedText = extractSpreadsheetText(buffer, file_name);
+      console.log(`[ExtractDoc] Spreadsheet extracted: ${extractedText.length} chars`);
 
     } else if (normalizedType === "pdf") {
       // PDF: try text extraction first, fallback to AI Vision
@@ -138,7 +124,7 @@ serve(async (req) => {
       console.log(`[ExtractDoc] Plain text: ${extractedText.length} chars`);
     }
 
-    if (!extractedText || extractedText.trim().length < 10) {
+    if (!extractedText || extractedText.trim().length < 10 || looksLikeExtractionFailure(extractedText)) {
       await supabase
         .from("knowledge_files")
         .update({ status: "error", error_message: "Não foi possível extrair texto do documento" })
@@ -291,26 +277,88 @@ Regras:
 }
 
 async function extractDocxText(buffer: ArrayBuffer): Promise<string> {
-  // DOCX is a ZIP file containing XML
-  // Simple extraction: find document.xml content and extract text from <w:t> tags
-  const bytes = new Uint8Array(buffer);
-  const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  
-  // Look for text between <w:t> tags (simplified DOCX text extraction)
-  const textMatches = text.match(/<w:t[^>]*>([^<]+)<\/w:t>/g);
-  if (textMatches) {
-    const extracted = textMatches
-      .map(m => {
-        const match = m.match(/<w:t[^>]*>([^<]+)<\/w:t>/);
-        return match ? match[1] : "";
-      })
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return extracted;
+  const zip = await JSZip.loadAsync(buffer);
+  const xmlParts: string[] = [];
+  const candidateFiles = [
+    "word/document.xml",
+    "word/header1.xml",
+    "word/header2.xml",
+    "word/footer1.xml",
+    "word/footer2.xml",
+    "word/footnotes.xml",
+    "word/endnotes.xml",
+  ];
+
+  for (const filePath of candidateFiles) {
+    const file = zip.file(filePath);
+    if (!file) continue;
+    xmlParts.push(await file.async("string"));
   }
 
-  return "";
+  const combined = xmlParts.join("\n");
+  if (!combined) {
+    return "";
+  }
+
+  return decodeXmlEntities(
+    combined
+      .replace(/<w:tab\/?\s*>/g, "\t")
+      .replace(/<w:br\/?\s*>/g, "\n")
+      .replace(/<\/w:p>/g, "\n")
+      .replace(/<\/w:tr>/g, "\n")
+      .replace(/<\/w:tc>/g, "\t")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s*\n\s*/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/\t+/g, "\t")
+      .replace(/[ ]{2,}/g, " ")
+      .trim()
+  );
+}
+
+function extractSpreadsheetText(buffer: ArrayBuffer, fileName: string): string {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sections: string[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) continue;
+
+    const rows = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(worksheet, {
+      header: 1,
+      defval: "",
+      blankrows: false,
+      raw: false,
+    });
+
+    const normalizedRows = rows
+      .map((row) => row.map((cell) => String(cell ?? "").trim()))
+      .filter((row) => row.some((cell) => cell.length > 0));
+
+    if (normalizedRows.length === 0) continue;
+
+    const header = `## Planilha: ${sheetName}`;
+    const body = normalizedRows
+      .map((row) => row.join(" | "))
+      .join("\n");
+
+    sections.push(`${header}\n${body}`);
+  }
+
+  return sections.join("\n\n").trim() || `Planilha ${fileName} sem conteúdo legível.`;
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function looksLikeExtractionFailure(text: string): boolean {
+  return /não consigo extrair|arquivo .* não foi (enviado|anexado)|envie o arquivo|cole o conteúdo|captura das abas?|não foi possível extrair/i.test(text.trim().toLowerCase());
 }
 
 function detectCategory(text: string, fileName: string): string {

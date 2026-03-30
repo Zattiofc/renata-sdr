@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function looksLikeExtractionFailure(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return /não consigo extrair|arquivo .* não foi (enviado|anexado)|envie o arquivo|cole o conteúdo|captura das abas?|não foi possível extrair/.test(normalized);
+}
+
 // Chunk text into segments of ~500 chars with 30 char overlap
 function chunkText(text: string, chunkSize = 500, overlap = 30): string[] {
   const chunks: string[] = [];
@@ -58,8 +63,39 @@ serve(async (req) => {
       });
     }
 
+    if (looksLikeExtractionFailure(content)) {
+      await supabase
+        .from('knowledge_files')
+        .update({ status: 'error', error_message: 'Falha na extração do documento antes dos embeddings' })
+        .eq('id', file_id);
+
+      return new Response(JSON.stringify({ error: 'invalid extracted content' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { data: fileRecord } = await supabase
+      .from('knowledge_files')
+      .select('category, file_name')
+      .eq('id', file_id)
+      .maybeSingle();
+
     // Chunk the content
     const chunks = chunkText(content);
+
+    if (chunks.length === 0) {
+      await supabase
+        .from('knowledge_files')
+        .update({ status: 'error', error_message: 'Documento sem conteúdo útil para indexação' })
+        .eq('id', file_id);
+
+      return new Response(JSON.stringify({ error: 'No usable chunks generated' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     const totalChunks = chunks.length;
     const batchEnd = Math.min(batch_start + BATCH_SIZE, totalChunks);
     const batchChunks = chunks.slice(batch_start, batchEnd);
@@ -93,9 +129,13 @@ serve(async (req) => {
           .insert({
             file_id,
             content: batchChunks[i],
+            category: fileRecord?.category || null,
             embedding: embeddingArray,
             chunk_index: batch_start + i,
-            metadata: { char_count: batchChunks[i].length }
+            metadata: {
+              char_count: batchChunks[i].length,
+              file_name: fileRecord?.file_name || null,
+            }
           });
 
         if (error) {
