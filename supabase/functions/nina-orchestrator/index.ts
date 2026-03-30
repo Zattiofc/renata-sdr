@@ -2114,6 +2114,29 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
   }).catch(err => console.error('[Nina] Error triggering analyze-conversation:', err));
 }
 
+// Sanitize AI response to remove any internal tags/markers before sending to client
+function sanitizeResponseForClient(content: string): string {
+  if (!content) return content;
+  
+  // Remove [INVENTORY_CONTEXT]...[/INVENTORY_CONTEXT] blocks
+  content = content.replace(/\[INVENTORY_CONTEXT\][\s\S]*?\[\/INVENTORY_CONTEXT\]/gi, '');
+  // Remove [INVENTORY_ERROR]...[/INVENTORY_ERROR] blocks
+  content = content.replace(/\[INVENTORY_ERROR\][\s\S]*?\[\/INVENTORY_ERROR\]/gi, '');
+  // Remove <inventory_context>...</inventory_context> blocks
+  content = content.replace(/<inventory_context>[\s\S]*?<\/inventory_context>/gi, '');
+  // Remove [SISTEMA INTERNO...] blocks
+  content = content.replace(/\[SISTEMA INTERNO[^\]]*\][\s\S]*?(?=\n\n|$)/gi, '');
+  // Remove [Resultado de ...]: blocks
+  content = content.replace(/\[Resultado de [^\]]+\]:.*$/gm, '');
+  // Remove any remaining square-bracket system markers
+  content = content.replace(/\[(INVENTORY_CONTEXT|INVENTORY_ERROR|\/INVENTORY_CONTEXT|\/INVENTORY_ERROR|SISTEMA INTERNO)\]/gi, '');
+  
+  // Clean up excessive whitespace
+  content = content.replace(/\n{3,}/g, '\n\n').trim();
+  
+  return content;
+}
+
 function isGenericContextLossResponse(content: string | null | undefined): boolean {
   if (!content) return true;
 
