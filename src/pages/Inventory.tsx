@@ -313,6 +313,60 @@ const Inventory: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Import Preview Dialog */}
+      <Dialog open={showImport} onOpenChange={setShowImport}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-primary" />
+              {importing ? 'Analisando planilha...' : `${importPreview.length} produtos encontrados`}
+            </DialogTitle>
+          </DialogHeader>
+          {importing ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">A IA está analisando sua planilha...</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-auto flex-1 border border-border rounded-lg">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 sticky top-0">
+                      <th className="p-2 text-left text-muted-foreground">Produto</th>
+                      <th className="p-2 text-left text-muted-foreground">SKU</th>
+                      <th className="p-2 text-left text-muted-foreground">Categoria</th>
+                      <th className="p-2 text-right text-muted-foreground">Qtd</th>
+                      <th className="p-2 text-left text-muted-foreground">Un</th>
+                      <th className="p-2 text-right text-muted-foreground">Preço</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map((p, i) => (
+                      <tr key={i} className="border-b border-border/30 hover:bg-muted/10">
+                        <td className="p-2 font-medium text-foreground">{p.product_name}</td>
+                        <td className="p-2 text-muted-foreground">{p.sku || '-'}</td>
+                        <td className="p-2"><span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-xs">{p.category}</span></td>
+                        <td className="p-2 text-right text-foreground">{p.quantity}</td>
+                        <td className="p-2 text-muted-foreground">{p.unit}</td>
+                        <td className="p-2 text-right text-foreground">R$ {Number(p.price).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setShowImport(false); setImportPreview([]); }}>Cancelar</Button>
+                <Button className="flex-1" onClick={handleConfirmImport} disabled={importInserting}>
+                  {importInserting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />}
+                  Importar {importPreview.length} produtos
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
