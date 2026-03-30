@@ -129,9 +129,22 @@ const Inventory: React.FC = () => {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Gerencie produtos e movimentações</p>
         </div>
-        <Button onClick={() => { resetForm(); setEditingItem(null); setShowForm(true); }}>
-          <Plus className="w-4 h-4 mr-1" /> Adicionar Produto
-        </Button>
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            {importing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
+            Importar Planilha
+          </Button>
+          <Button onClick={() => { resetForm(); setEditingItem(null); setShowForm(true); }}>
+            <Plus className="w-4 h-4 mr-1" /> Adicionar Produto
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
