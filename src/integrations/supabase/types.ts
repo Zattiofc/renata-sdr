@@ -138,6 +138,110 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_executions: {
+        Row: {
+          automation_id: string
+          contact_id: string | null
+          conversation_id: string | null
+          executed_at: string
+          id: string
+          metadata: Json | null
+          result: string
+        }
+        Insert: {
+          automation_id: string
+          contact_id?: string | null
+          conversation_id?: string | null
+          executed_at?: string
+          id?: string
+          metadata?: Json | null
+          result?: string
+        }
+        Update: {
+          automation_id?: string
+          contact_id?: string | null
+          conversation_id?: string | null
+          executed_at?: string
+          id?: string
+          metadata?: Json | null
+          result?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_executions_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automations: {
+        Row: {
+          action_config: Json
+          action_type: string
+          cooldown_hours: number
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          max_executions: number
+          name: string
+          trigger_config: Json
+          trigger_type: string
+          updated_at: string
+        }
+        Insert: {
+          action_config?: Json
+          action_type: string
+          cooldown_hours?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          max_executions?: number
+          name: string
+          trigger_config?: Json
+          trigger_type: string
+          updated_at?: string
+        }
+        Update: {
+          action_config?: Json
+          action_type?: string
+          cooldown_hours?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          max_executions?: number
+          name?: string
+          trigger_config?: Json
+          trigger_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       broadcast_campaigns: {
         Row: {
           batch_size: number
