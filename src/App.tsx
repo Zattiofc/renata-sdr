@@ -12,6 +12,7 @@ import Kanban from './components/Kanban';
 import Materials from './components/Materials';
 import Automations from './pages/Automations';
 import Inventory from './pages/Inventory';
+import AIAssistant from './pages/AIAssistant';
 import Auth from './pages/Auth';
 
 import SetPassword from './pages/SetPassword';
@@ -81,6 +82,7 @@ const App: React.FC = () => {
                   <Route path="/scheduling" element={<Scheduling />} />
                   <Route path="/automations" element={<Automations />} />
                   <Route path="/inventory" element={<Inventory />} />
+                  <Route path="/ai-assistant" element={<AIAssistant />} />
                   <Route path="/team" element={<Team />} />
                   <Route path="/settings" element={<Settings />} />
                   
