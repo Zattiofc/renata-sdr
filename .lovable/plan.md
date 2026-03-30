@@ -1,85 +1,93 @@
 
 
-# Seção de Estoque — Consulta e Atualização pela IA
+# Chat IA Interno — Assistente de Operações do Sistema
 
-## Viabilidade
+## Visão Geral
+Criar uma página **Assistente IA** acessível no sidebar, onde o operador do sistema pode conversar com uma IA que tem acesso completo ao banco de dados e pode executar ações como enviar mensagens, consultar contatos, analisar pipeline, disparar follow-ups, etc.
 
-Totalmente viável. O sistema já possui:
-- **Tool calling** no `nina-orchestrator` (ex: `update_deal_stage`, `create_appointment`)
-- **Tabela `official_materials`** com `produto_relacionado` e `linha_negocio`
-- Infraestrutura de RAG e embeddings
+Diferente do chat de WhatsApp (que é a Nina falando com leads), este é um **chat interno para o operador** gerenciar o sistema via linguagem natural.
 
-Basta criar uma tabela de estoque, uma UI de gestão, e duas tools para a IA consultar e atualizar quantidades.
+## Exemplo de uso
+- "Analise os contatos que não responderam nas últimas 24h e envie um follow-up"
+- "Quais deals estão parados no estágio Qualificação há mais de 3 dias?"
+- "Mova o deal do João para Negociação"
+- "Me mostre o estoque atual de Pastrami"
+- "Envie uma mensagem pro 5511999999999 dizendo que o pedido está pronto"
 
 ---
 
-## 1. Banco de Dados — Migration
+## Arquitetura
 
-**Tabela `inventory`:**
+```text
+┌─────────────────┐       ┌──────────────────────┐
+│  /ai-assistant   │──────▶│  Edge Function        │
+│  (React page)   │       │  ai-assistant         │
+│  Chat UI        │◀──────│                       │
+└─────────────────┘       │  Tools:               │
+                          │  - query_database     │
+                          │  - send_message       │
+                          │  - update_deal        │
+                          │  - list_contacts      │
+                          │  - check_inventory    │
+                          │  - create_automation  │
+                          │  - send_bulk_followup │
+                          └──────────┬───────────┘
+                                     │
+                              Supabase DB + 
+                              send-evolution-message
+```
 
-| Coluna | Tipo | Descrição |
-|---|---|---|
-| id | uuid PK | |
-| product_name | text | Nome do produto |
-| sku | text (unique) | Código do produto |
-| category | text | Linha de negócio (humano, veterinario, etc.) |
-| quantity | integer | Quantidade em estoque |
-| min_quantity | integer | Estoque mínimo (alerta) |
-| unit | text | Unidade (un, cx, kg, ml) |
-| price | numeric | Preço unitário |
-| description | text | Descrição do produto |
-| is_active | boolean | Ativo/inativo |
-| updated_by | uuid | Último usuário que atualizou |
-| created_at / updated_at | timestamp | |
+## O que será construído
 
-**Tabela `inventory_movements`:** (histórico)
+### 1. Edge Function `ai-assistant`
+- Recebe mensagens do operador + histórico de conversa
+- Usa o modelo configurado em `nina_settings` (via Lovable AI gateway)
+- System prompt focado em operações internas (não é a Nina/SDR)
+- **Tools disponíveis:**
+  - `query_contacts` — buscar contatos por nome, telefone, status, última atividade
+  - `query_deals` — buscar deals por estágio, contato, valor
+  - `update_deal_stage` — mover deal no pipeline
+  - `send_whatsapp_message` — enviar mensagem via Evolution API
+  - `send_bulk_followup` — enviar follow-up para múltiplos contatos de uma vez
+  - `check_inventory` — consultar estoque atual
+  - `list_appointments` — consultar agendamentos
+  - `query_conversations` — buscar conversas recentes, sem resposta, etc.
+- Loop de tool calling: executa tools, retorna resultado para a IA, e repete até ter resposta final
 
-| Coluna | Tipo | Descrição |
-|---|---|---|
-| id | uuid PK | |
-| inventory_id | uuid FK | Produto |
-| type | text | `in` (entrada), `out` (saída), `adjustment` |
-| quantity | integer | Quantidade movimentada |
-| reason | text | Motivo (venda, reposição, ajuste) |
-| contact_id | uuid | Contato associado (se venda) |
-| conversation_id | uuid | Conversa associada |
-| created_by | text | `nina` / `manual` / user_id |
-| created_at | timestamp | |
+### 2. Página React `/ai-assistant`
+- Chat interface simples com histórico de mensagens na sessão
+- Renderização markdown das respostas (react-markdown)
+- Indicador de loading enquanto a IA processa
+- Exibição de ações executadas (ex: "✅ Mensagem enviada para João")
 
-RLS: acesso total para `authenticated` (single-tenant).
+### 3. Sidebar
+- Novo item "Assistente IA" com ícone `Bot` do lucide-react
 
-## 2. Edge Function — Tools da IA
+### 4. Rota no App.tsx
+- `/ai-assistant` → componente `AIAssistant`
 
-Adicionar ao `nina-orchestrator` duas tools:
+## Detalhes técnicos
 
-**`check_inventory`**: Consulta estoque por nome/SKU/categoria. Retorna lista com nome, quantidade disponível, preço e status. A IA usa para informar o cliente sobre disponibilidade.
+### Edge Function — tools com acesso real ao banco
+Cada tool executa queries reais via `supabase` client (service role). Exemplo:
 
-**`reserve_inventory`**: Registra saída de estoque quando cliente confirma pedido. Cria registro em `inventory_movements` e decrementa `quantity`. Inclui validação de estoque suficiente.
+- `query_contacts`: `SELECT * FROM contacts WHERE name ILIKE '%termo%' OR last_activity < now() - interval 'X hours'`
+- `send_whatsapp_message`: invoca `send-evolution-message` internamente
+- `send_bulk_followup`: itera sobre contatos filtrados e envia mensagem personalizada para cada um
 
-Contexto no prompt: injetar lista de produtos com estoque baixo e categorias disponíveis.
+### System Prompt
+Prompt de operador interno — explica que o assistente tem acesso ao banco, pode executar ações, e deve confirmar antes de ações destrutivas ou envios em massa.
 
-## 3. UI — Página `/inventory`
-
-- **Dashboard de estoque**: cards com totais, alertas de estoque baixo
-- **Tabela de produtos**: nome, SKU, categoria, quantidade, preço, status
-- **CRUD**: adicionar/editar/remover produtos
-- **Histórico de movimentações**: por produto, com filtros por tipo e período
-- **Indicadores**: produtos abaixo do mínimo, movimentações recentes
-
-## 4. Integração
-
-- **Sidebar**: novo item "Estoque" com ícone `Package`
-- **App.tsx**: rota `/inventory`
-- **nina-orchestrator**: tools + contexto de estoque no prompt
+### Config
+- `supabase/config.toml`: adicionar `[functions.ai-assistant]` com `verify_jwt = false`
 
 ## Arquivos a criar/editar
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/migrations/xxx.sql` | Tabelas inventory + inventory_movements + RLS |
-| `src/pages/Inventory.tsx` | Página de gestão de estoque |
-| `src/hooks/useInventory.ts` | Hook CRUD + movimentações |
-| `supabase/functions/nina-orchestrator/index.ts` | Tools check_inventory + reserve_inventory |
-| `src/components/Sidebar.tsx` | Novo menu "Estoque" |
-| `src/App.tsx` | Rota /inventory |
+| `supabase/functions/ai-assistant/index.ts` | Edge function com tools |
+| `src/pages/AIAssistant.tsx` | Página de chat |
+| `src/components/Sidebar.tsx` | Novo menu item |
+| `src/App.tsx` | Nova rota |
+| `supabase/config.toml` | Config da edge function |
 
