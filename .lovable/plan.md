@@ -1,103 +1,85 @@
 
 
-# Automações — Menu de Regras Automatizadas
+# Seção de Estoque — Consulta e Atualização pela IA
 
-## Visão Geral
-Criar uma página **Automações** (`/automations`) onde o usuário configura regras do tipo "se X acontecer, então faça Y", armazenadas no banco e executadas por uma edge function periódica (cron via `pg_cron`).
+## Viabilidade
 
-## Exemplo de uso
-> "Cliente não respondeu há 5 horas → enviar follow-up automático"
+Totalmente viável. O sistema já possui:
+- **Tool calling** no `nina-orchestrator` (ex: `update_deal_stage`, `create_appointment`)
+- **Tabela `official_materials`** com `produto_relacionado` e `linha_negocio`
+- Infraestrutura de RAG e embeddings
 
----
-
-## Arquitetura
-
-```text
-┌──────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
-│  UI: /automations │────▶│  Tabela: automations  │◀────│  pg_cron (1min) │
-│  CRUD de regras   │     │  trigger + action     │     │  ↓              │
-└──────────────────┘     └──────────────────────┘     │  Edge Function  │
-                                                       │  run-automations│
-                                                       └────────┬────────┘
-                                                                │
-                                                       ┌────────▼────────┐
-                                                       │  send_queue     │
-                                                       │  (WhatsApp msg) │
-                                                       └─────────────────┘
-```
+Basta criar uma tabela de estoque, uma UI de gestão, e duas tools para a IA consultar e atualizar quantidades.
 
 ---
 
 ## 1. Banco de Dados — Migration
 
-**Tabela `automations`:**
+**Tabela `inventory`:**
+
 | Coluna | Tipo | Descrição |
 |---|---|---|
 | id | uuid PK | |
-| name | text | Nome da automação |
-| is_active | boolean | Liga/desliga |
-| trigger_type | text | Ex: `no_reply`, `lead_state_change`, `tag_added`, `new_contact` |
-| trigger_config | jsonb | Parâmetros (ex: `{ "hours": 5 }`) |
-| action_type | text | Ex: `send_message`, `add_tag`, `change_stage`, `notify_team` |
-| action_config | jsonb | Parâmetros (ex: `{ "message": "Olá, tudo bem?" }`) |
-| max_executions | int | Limite por contato (evitar spam) |
-| cooldown_hours | int | Intervalo mínimo entre execuções |
-| created_by | uuid | Usuário que criou |
+| product_name | text | Nome do produto |
+| sku | text (unique) | Código do produto |
+| category | text | Linha de negócio (humano, veterinario, etc.) |
+| quantity | integer | Quantidade em estoque |
+| min_quantity | integer | Estoque mínimo (alerta) |
+| unit | text | Unidade (un, cx, kg, ml) |
+| price | numeric | Preço unitário |
+| description | text | Descrição do produto |
+| is_active | boolean | Ativo/inativo |
+| updated_by | uuid | Último usuário que atualizou |
 | created_at / updated_at | timestamp | |
 
-**Tabela `automation_executions`:**
+**Tabela `inventory_movements`:** (histórico)
+
 | Coluna | Tipo | Descrição |
 |---|---|---|
 | id | uuid PK | |
-| automation_id | uuid FK | |
-| contact_id | uuid FK | |
-| conversation_id | uuid | |
-| executed_at | timestamp | |
-| result | text | success / error |
-| metadata | jsonb | Detalhes |
+| inventory_id | uuid FK | Produto |
+| type | text | `in` (entrada), `out` (saída), `adjustment` |
+| quantity | integer | Quantidade movimentada |
+| reason | text | Motivo (venda, reposição, ajuste) |
+| contact_id | uuid | Contato associado (se venda) |
+| conversation_id | uuid | Conversa associada |
+| created_by | text | `nina` / `manual` / user_id |
+| created_at | timestamp | |
 
 RLS: acesso total para `authenticated` (single-tenant).
 
-## 2. Edge Function — `run-automations`
+## 2. Edge Function — Tools da IA
 
-Chamada a cada minuto via `pg_cron`. Lógica por trigger_type:
+Adicionar ao `nina-orchestrator` duas tools:
 
-- **`no_reply`**: busca conversas com `status = 'nina'`, `last_message_at < now() - X horas`, última mensagem do tipo `nina/human` (ou seja, o lead não respondeu). Enfileira follow-up na `send_queue`.
-- **`new_contact`**: contatos criados nos últimos 2 min sem mensagem → envia boas-vindas.
-- **`lead_state_change`**: verifica `lead_state_history` para transições recentes.
-- **`tag_added`**: verifica contatos com tag específica sem execução anterior.
+**`check_inventory`**: Consulta estoque por nome/SKU/categoria. Retorna lista com nome, quantidade disponível, preço e status. A IA usa para informar o cliente sobre disponibilidade.
 
-Cada execução registra em `automation_executions` para evitar duplicatas e respeitar cooldown/max.
+**`reserve_inventory`**: Registra saída de estoque quando cliente confirma pedido. Cria registro em `inventory_movements` e decrementa `quantity`. Inclui validação de estoque suficiente.
 
-## 3. Página UI — `src/pages/Automations.tsx`
+Contexto no prompt: injetar lista de produtos com estoque baixo e categorias disponíveis.
 
-- Lista de automações com toggle ativo/inativo
-- Modal de criação/edição com:
-  - Nome
-  - **Gatilho** (dropdown): "Sem resposta por X horas", "Novo contato", "Mudança de estado", "Tag adicionada"
-  - Config do gatilho (campos dinâmicos por tipo)
-  - **Ação** (dropdown): "Enviar mensagem", "Adicionar tag", "Mover no pipeline", "Notificar equipe"
-  - Config da ação (campos dinâmicos)
-  - Limite de execuções e cooldown
-- Log de execuções recentes por automação
-- Contadores: execuções hoje, taxa de sucesso
+## 3. UI — Página `/inventory`
+
+- **Dashboard de estoque**: cards com totais, alertas de estoque baixo
+- **Tabela de produtos**: nome, SKU, categoria, quantidade, preço, status
+- **CRUD**: adicionar/editar/remover produtos
+- **Histórico de movimentações**: por produto, com filtros por tipo e período
+- **Indicadores**: produtos abaixo do mínimo, movimentações recentes
 
 ## 4. Integração
 
-- **Sidebar**: adicionar item "Automações" com ícone `Zap`
-- **App.tsx**: rota `/automations`
-- **pg_cron**: schedule `run-automations` a cada minuto
-- **config.toml**: `verify_jwt = false` para `run-automations`
+- **Sidebar**: novo item "Estoque" com ícone `Package`
+- **App.tsx**: rota `/inventory`
+- **nina-orchestrator**: tools + contexto de estoque no prompt
 
 ## Arquivos a criar/editar
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/migrations/xxx.sql` | Tabelas + RLS + realtime |
-| `supabase/functions/run-automations/index.ts` | Motor de execução |
-| `src/pages/Automations.tsx` | Página principal |
-| `src/hooks/useAutomations.ts` | Hook CRUD |
-| `src/components/Sidebar.tsx` | Novo menu item |
-| `src/App.tsx` | Nova rota |
-| `supabase/config.toml` | Config da edge function |
+| `supabase/migrations/xxx.sql` | Tabelas inventory + inventory_movements + RLS |
+| `src/pages/Inventory.tsx` | Página de gestão de estoque |
+| `src/hooks/useInventory.ts` | Hook CRUD + movimentações |
+| `supabase/functions/nina-orchestrator/index.ts` | Tools check_inventory + reserve_inventory |
+| `src/components/Sidebar.tsx` | Novo menu "Estoque" |
+| `src/App.tsx` | Rota /inventory |
 
