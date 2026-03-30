@@ -1,63 +1,103 @@
 
 
-## Problem
+# Automações — Menu de Regras Automatizadas
 
-Users are confusing the overlay's static mockups with actual clickable buttons. The current design uses cards with mini UI recreations that look too much like real interactive elements. We need to make it unmistakably an **animated tutorial/demo** rather than a UI with buttons.
+## Visão Geral
+Criar uma página **Automações** (`/automations`) onde o usuário configura regras do tipo "se X acontecer, então faça Y", armazenadas no banco e executadas por uma edge function periódica (cron via `pg_cron`).
 
-## Approach: Animated Step-by-Step Demo
+## Exemplo de uso
+> "Cliente não respondeu há 5 horas → enviar follow-up automático"
 
-Replace the current card-based layout with a **single centered cinematic animation** that plays out the entire remix process as a looping demo. The overlay will show a realistic recreation of the Lovable UI with an animated cursor performing each action, making it obvious this is a demonstration, not interactive elements.
+---
 
-### Design Concept
+## Arquitetura
 
-A dark overlay with a central "screen recording" style container that loops through 3 phases:
+```text
+┌──────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
+│  UI: /automations │────▶│  Tabela: automations  │◀────│  pg_cron (1min) │
+│  CRUD de regras   │     │  trigger + action     │     │  ↓              │
+└──────────────────┘     └──────────────────────┘     │  Edge Function  │
+                                                       │  run-automations│
+                                                       └────────┬────────┘
+                                                                │
+                                                       ┌────────▼────────┐
+                                                       │  send_queue     │
+                                                       │  (WhatsApp msg) │
+                                                       └─────────────────┘
+```
 
-1. **Phase 1 (0-3s)**: Show the project name area at top-left. An animated cursor moves to it and clicks. The dropdown menu slides open (based on the real menu from the user's screenshot: Settings, Remix this project, Publish to profile, etc.)
+---
 
-2. **Phase 2 (3-6s)**: The cursor moves down to "Remix this project" menu item, which highlights on hover. Cursor clicks it. Menu closes.
+## 1. Banco de Dados — Migration
 
-3. **Phase 3 (6-10s)**: The "Remix project" modal appears (matching the real modal from screenshot 2: project name field, "Include project history" toggle, "Include custom knowledge" toggle). Cursor moves to "Include custom knowledge" toggle and activates it. Then cursor moves to "Remix" button and clicks. Brief success flash.
+**Tabela `automations`:**
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| id | uuid PK | |
+| name | text | Nome da automação |
+| is_active | boolean | Liga/desliga |
+| trigger_type | text | Ex: `no_reply`, `lead_state_change`, `tag_added`, `new_contact` |
+| trigger_config | jsonb | Parâmetros (ex: `{ "hours": 5 }`) |
+| action_type | text | Ex: `send_message`, `add_tag`, `change_stage`, `notify_team` |
+| action_config | jsonb | Parâmetros (ex: `{ "message": "Olá, tudo bem?" }`) |
+| max_executions | int | Limite por contato (evitar spam) |
+| cooldown_hours | int | Intervalo mínimo entre execuções |
+| created_by | uuid | Usuário que criou |
+| created_at / updated_at | timestamp | |
 
-4. **Loop**: Fade out and restart.
+**Tabela `automation_executions`:**
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| id | uuid PK | |
+| automation_id | uuid FK | |
+| contact_id | uuid FK | |
+| conversation_id | uuid | |
+| executed_at | timestamp | |
+| result | text | success / error |
+| metadata | jsonb | Detalhes |
 
-### Visual Cues That This Is Instructional
+RLS: acesso total para `authenticated` (single-tenant).
 
-- A banner at the top: **"📋 Siga estas instruções para criar sua cópia"** with a subtle pulsing border
-- Step indicators (1, 2, 3) that light up as each phase plays
-- The animated cursor (a custom SVG mouse pointer with a click ripple effect) makes it obvious this is a demonstration
-- A "Fechar" (close) or dismiss button so users can close the overlay
-- Text labels like "Passo 1", "Passo 2", "Passo 3" that appear during each phase
-- The whole thing is inside a rounded container with a subtle "REC" or "TUTORIAL" badge
+## 2. Edge Function — `run-automations`
 
-### Technical Implementation
+Chamada a cada minuto via `pg_cron`. Lógica por trigger_type:
 
-**Single file change**: `src/components/RemixOverlay.tsx`
+- **`no_reply`**: busca conversas com `status = 'nina'`, `last_message_at < now() - X horas`, última mensagem do tipo `nina/human` (ou seja, o lead não respondeu). Enfileira follow-up na `send_queue`.
+- **`new_contact`**: contatos criados nos últimos 2 min sem mensagem → envia boas-vindas.
+- **`lead_state_change`**: verifica `lead_state_history` para transições recentes.
+- **`tag_added`**: verifica contatos com tag específica sem execução anterior.
 
-- Use `framer-motion` variants with a timeline approach using `useEffect` + `useState` to cycle through phases
-- Animated cursor component: a `motion.div` with a mouse pointer SVG that moves between coordinates using `animate={{ x, y }}`
-- Click ripple: a small circle that scales up and fades when the cursor "clicks"
-- Menu mockup: styled to match the dark theme from screenshot 1 (dark bg, white text, icons)
-- Modal mockup: styled to match screenshot 2 (Lovable logo, project name input, toggles, Cancel/Remix buttons)
-- Step progress bar at the top showing which step is active
-- The entire animation loops every ~10-12 seconds
+Cada execução registra em `automation_executions` para evitar duplicatas e respeitar cooldown/max.
 
-### Key UI Elements to Recreate (from screenshots)
+## 3. Página UI — `src/pages/Automations.tsx`
 
-**Menu (screenshot 1):**
-- Dark background (`bg-zinc-900`)
-- Items: "Settings", "Remix this project", "Publish to profile", "Rename project", etc.
-- "Remix this project" gets a hover highlight
+- Lista de automações com toggle ativo/inativo
+- Modal de criação/edição com:
+  - Nome
+  - **Gatilho** (dropdown): "Sem resposta por X horas", "Novo contato", "Mudança de estado", "Tag adicionada"
+  - Config do gatilho (campos dinâmicos por tipo)
+  - **Ação** (dropdown): "Enviar mensagem", "Adicionar tag", "Mover no pipeline", "Notificar equipe"
+  - Config da ação (campos dinâmicos)
+  - Limite de execuções e cooldown
+- Log de execuções recentes por automação
+- Contadores: execuções hoje, taxa de sucesso
 
-**Modal (screenshot 2):**
-- Lovable logo icon
-- Title "Remix project"
-- Subtitle text
-- "Project name" input
-- "Include project history" toggle (off)
-- "Include custom knowledge" toggle (cursor turns this ON)
-- Cancel / Remix buttons
+## 4. Integração
 
-### No External Dependencies Needed
+- **Sidebar**: adicionar item "Automações" com ícone `Zap`
+- **App.tsx**: rota `/automations`
+- **pg_cron**: schedule `run-automations` a cada minuto
+- **config.toml**: `verify_jwt = false` para `run-automations`
 
-Everything uses existing framer-motion + Tailwind + Lucide icons.
+## Arquivos a criar/editar
+
+| Arquivo | Ação |
+|---|---|
+| `supabase/migrations/xxx.sql` | Tabelas + RLS + realtime |
+| `supabase/functions/run-automations/index.ts` | Motor de execução |
+| `src/pages/Automations.tsx` | Página principal |
+| `src/hooks/useAutomations.ts` | Hook CRUD |
+| `src/components/Sidebar.tsx` | Novo menu item |
+| `src/App.tsx` | Nova rota |
+| `supabase/config.toml` | Config da edge function |
 
