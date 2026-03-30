@@ -72,20 +72,31 @@ serve(async (req) => {
 
     console.log(`[import-inventory] Extracted content length: ${rawContent.length}`);
 
+    // Fetch AI model from nina_settings
+    const { data: ninaSettings } = await supabase
+      .from('nina_settings')
+      .select('ai_model_name, ai_api_key')
+      .limit(1)
+      .single();
+
+    const configuredModel = ninaSettings?.ai_model_name || 'google/gemini-2.5-flash';
+
     // Use AI to structure the data
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     if (!lovableApiKey) {
       return new Response(JSON.stringify({ error: 'AI API key not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const aiResponse = await fetch('https://api.lovable.dev/v1/chat/completions', {
+    console.log(`[import-inventory] Using AI model: ${configuredModel}`);
+
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${lovableApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: configuredModel,
         messages: [
           {
             role: 'system',
