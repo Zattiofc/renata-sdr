@@ -1153,6 +1153,11 @@ async function processQueueItem(
     throw new Error('Conversation not found');
   }
 
+  if (message.processed_by_nina) {
+    console.log(`[Nina] Message ${message.id} already processed, skipping duplicate queue item`);
+    return;
+  }
+
   // Check if conversation is still in Nina mode
   if (conversation.status !== 'nina') {
     console.log('[Nina] Conversation no longer in Nina mode, skipping');
@@ -1162,6 +1167,27 @@ async function processQueueItem(
   // Check if auto-response is enabled
   if (!settings?.auto_response_enabled) {
     console.log('[Nina] Auto-response disabled, marking as processed without responding');
+    await supabase
+      .from('messages')
+      .update({ processed_by_nina: true })
+      .eq('id', message.id);
+    return;
+  }
+
+  const { data: newerUserMessage } = await supabase
+    .from('messages')
+    .select('id, sent_at, content')
+    .eq('conversation_id', conversation.id)
+    .eq('from_type', 'user')
+    .gt('sent_at', message.sent_at)
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (newerUserMessage) {
+    console.log(
+      `[Nina] Skipping stale response for ${message.id} because newer user message ${newerUserMessage.id} already exists`
+    );
     await supabase
       .from('messages')
       .update({ processed_by_nina: true })
@@ -1272,23 +1298,60 @@ async function processQueueItem(
       const conversationContext = lastMessages.join(' ').substring(0, 300);
       const enrichedQuery = `${userMessageContent} ${conversationContext}`.trim();
 
-      const ragSession = new Supabase.ai.Session("gte-small");
-      const queryEmbedding = await ragSession.run(enrichedQuery, { mean_pool: true, normalize: true });
-      const queryArray = Array.from(queryEmbedding as Float32Array);
-
       // Adaptive threshold: lower for longer conversations (more context available)
       const msgCount = conversationHistory.length;
       const adaptiveThreshold = msgCount > 10 ? 0.55 : msgCount > 5 ? 0.60 : 0.65;
 
-      const { data: knowledgeChunks, error: ragError } = await supabase
-        .rpc('match_knowledge_chunks_enhanced', {
-          query_embedding: queryArray,
-          match_threshold: adaptiveThreshold,
-          match_count: 8,
-          filter_category: null
-        });
+      const ragSession = new Supabase.ai.Session("gte-small");
+      const queryCandidates = [
+        {
+          label: 'enriched',
+          text: enrichedQuery,
+          thresholds: buildRagThresholds(adaptiveThreshold)
+        },
+        ...(enrichedQuery !== userMessageContent
+          ? [{ label: 'user-only', text: userMessageContent, thresholds: buildRagThresholds(Math.max(adaptiveThreshold - 0.1, 0.45)) }]
+          : [])
+      ];
 
-      if (!ragError && knowledgeChunks && knowledgeChunks.length > 0) {
+      let knowledgeChunks: any[] = [];
+
+      for (const candidate of queryCandidates) {
+        if (!candidate.text.trim()) continue;
+
+        const queryEmbedding = await ragSession.run(candidate.text, { mean_pool: true, normalize: true });
+        const queryArray = Array.from(queryEmbedding as Float32Array);
+
+        for (const threshold of candidate.thresholds) {
+          const { data, error: ragError } = await supabase
+            .rpc('match_knowledge_chunks_enhanced', {
+              query_embedding: queryArray,
+              match_threshold: threshold,
+              match_count: 10,
+              filter_category: null
+            });
+
+          if (ragError) {
+            console.error('[Nina] RAG query error:', ragError);
+            break;
+          }
+
+          const usefulChunks = (data || []).filter((chunk: any) => !isLowQualityKnowledgeChunk(chunk.content));
+          if (usefulChunks.length > 0) {
+            knowledgeChunks = usefulChunks;
+            console.log(
+              `[Nina] RAG fallback hit using ${candidate.label} query at threshold ${threshold} (${usefulChunks.length} chunks)`
+            );
+            break;
+          }
+        }
+
+        if (knowledgeChunks.length > 0) {
+          break;
+        }
+      }
+
+      if (knowledgeChunks.length > 0) {
         // Re-rank: boost chunks with higher effectiveness scores and prioritize by category relevance
         const reranked = knowledgeChunks
           .map((chunk: any) => ({
@@ -1841,6 +1904,24 @@ function buildDeterministicContextFallback(lastUserContent: string | null | unde
   }
 
   return `Perfeito${greetingName}. Retomando de onde paramos, me confirma o próximo passo que você prefere e eu sigo com você.`;
+}
+
+function buildRagThresholds(baseThreshold: number): number[] {
+  return [...new Set([
+    Number(baseThreshold.toFixed(2)),
+    Number(Math.max(baseThreshold - 0.1, 0.45).toFixed(2)),
+    0.35,
+  ])];
+}
+
+function isLowQualityKnowledgeChunk(content: string | null | undefined): boolean {
+  const normalized = (content || '').trim().toLowerCase();
+
+  if (normalized.length < 30) {
+    return true;
+  }
+
+  return /não consigo extrair|arquivo .* não foi (enviado|anexado)|envie o arquivo|cole o conteúdo|captura das abas?|não foi possível extrair/i.test(normalized);
 }
 
 // Helper function to queue text response with chunking
