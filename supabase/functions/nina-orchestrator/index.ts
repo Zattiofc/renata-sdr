@@ -189,6 +189,30 @@ const cancelAppointmentTool = {
   }
 };
 
+// Tool definition for updating deal stage in pipeline
+const updateDealStageTool = {
+  type: "function",
+  function: {
+    name: "update_deal_stage",
+    description: "Atualizar o estágio do deal/negociação do cliente no pipeline de vendas. Use quando detectar que o cliente avançou no funil: demonstrou interesse, confirmou pedido, fez pagamento, etc. IMPORTANTE: Avalie a conversa e mova o lead para o estágio correto automaticamente.",
+    parameters: {
+      type: "object",
+      properties: {
+        stage_name: {
+          type: "string",
+          description: "Nome do estágio destino (ex: 'Em Qualificação', 'Pedido Montado', 'Aguardando Pagamento', 'Pagamento Efetuado', 'Perdido', 'Entrega', 'Pós-Venda', 'Reativação')"
+        },
+        motivo: {
+          type: "string",
+          description: "Motivo da mudança de estágio (ex: 'Cliente demonstrou interesse no produto X', 'Cliente confirmou pedido')"
+        }
+      },
+      required: ["stage_name", "motivo"],
+      additionalProperties: false
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1397,6 +1421,53 @@ ${knowledgeContext}
     console.error('[Nina] RAG error (non-fatal):', ragError);
   }
 
+  // === PIPELINE STAGE CONTEXT: Inject stage info for AI to move deals ===
+  try {
+    const { data: pipelineStages } = await supabase
+      .from('pipeline_stages')
+      .select('title, position, ai_trigger_criteria, is_ai_managed')
+      .eq('is_active', true)
+      .order('position', { ascending: true });
+    
+    if (pipelineStages?.length) {
+      // Get current deal stage
+      const { data: currentDeal } = await supabase
+        .from('deals')
+        .select('stage_id, pipeline_stages!inner(title, position)')
+        .eq('contact_id', conversation.contact_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      const currentStageName = (currentDeal as any)?.pipeline_stages?.title || 'Novo Contato';
+      
+      const stagesInfo = pipelineStages
+        .map((s: any) => {
+          const current = s.title === currentStageName ? ' ← ESTÁGIO ATUAL' : '';
+          const criteria = s.ai_trigger_criteria ? `\n     Critérios para mover para cá: ${s.ai_trigger_criteria}` : '';
+          return `  ${s.position + 1}. ${s.title}${current}${criteria}`;
+        })
+        .join('\n');
+      
+      finalPrompt += `\n\n<pipeline_context>
+PIPELINE DE VENDAS — Use a ferramenta update_deal_stage para mover o lead quando ele atender os critérios:
+${stagesInfo}
+
+REGRA: Avalie CADA resposta do cliente e mova automaticamente para o estágio correto.
+Se o cliente demonstrar interesse → "Em Qualificação"
+Se confirmar pedido → "Pedido Montado"  
+Se confirmar pagamento → "Aguardando Pagamento"
+Se enviar comprovante → "Pagamento Efetuado"
+Se desistir/não querer → "Perdido"
+Estágio atual do lead: ${currentStageName}
+</pipeline_context>`;
+      
+      console.log(`[Nina] Pipeline context injected: ${pipelineStages.length} stages, current: ${currentStageName}`);
+    }
+  } catch (pipeErr) {
+    console.error('[Nina] Pipeline context error (non-fatal):', pipeErr);
+  }
+
   // Debug: Log current date/time being used in prompt
   const nowBR = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   console.log('[Nina] Current date/time (BR):', nowBR);
@@ -1413,7 +1484,7 @@ ${knowledgeContext}
   console.log('[Nina] Using AI config:', { provider: aiConfig.provider, model: aiConfig.model });
 
   // Build tools array - only add appointment tools if enabled
-  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool]; // Always available
+  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool]; // Always available
   if (settings?.ai_scheduling_enabled !== false) {
     tools.push(createAppointmentTool);
     tools.push(rescheduleAppointmentTool);
@@ -1631,6 +1702,71 @@ ${knowledgeContext}
         }
       } catch (parseError) {
         console.error('[Nina] Error parsing classify_intent arguments:', parseError);
+      }
+    }
+
+    if (toolCall.function?.name === 'update_deal_stage') {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        console.log('[Nina] Processing update_deal_stage tool call:', args);
+        
+        // Find the target stage by name (case-insensitive partial match)
+        const { data: stages } = await supabase
+          .from('pipeline_stages')
+          .select('id, title, position')
+          .eq('is_active', true)
+          .order('position', { ascending: true });
+        
+        if (stages?.length) {
+          const targetStage = stages.find((s: any) => 
+            s.title.toLowerCase() === args.stage_name.toLowerCase() ||
+            s.title.toLowerCase().includes(args.stage_name.toLowerCase()) ||
+            args.stage_name.toLowerCase().includes(s.title.toLowerCase())
+          );
+          
+          if (targetStage) {
+            // Get current deal
+            const { data: currentDeal } = await supabase
+              .from('deals')
+              .select('id, stage_id, stage')
+              .eq('contact_id', conversation.contact_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+            
+            if (currentDeal && currentDeal.stage_id !== targetStage.id) {
+              // Get old stage name for logging
+              const oldStage = stages.find((s: any) => s.id === currentDeal.stage_id);
+              
+              await supabase
+                .from('deals')
+                .update({ stage_id: targetStage.id, stage: targetStage.title })
+                .eq('id', currentDeal.id);
+              
+              // Log the transition
+              await supabase.from('memory_events').insert({
+                contact_id: conversation.contact_id,
+                conversation_id: conversation.id,
+                tipo: 'stage_change',
+                payload: {
+                  from_stage: oldStage?.title || 'unknown',
+                  to_stage: targetStage.title,
+                  motivo: args.motivo,
+                  deal_id: currentDeal.id,
+                  automated: true
+                }
+              });
+              
+              console.log(`[Nina] Deal stage updated: "${oldStage?.title}" → "${targetStage.title}" (${args.motivo})`);
+            } else {
+              console.log(`[Nina] Deal already at stage "${targetStage.title}" or not found`);
+            }
+          } else {
+            console.warn(`[Nina] Stage not found: "${args.stage_name}"`);
+          }
+        }
+      } catch (parseError) {
+        console.error('[Nina] Error parsing update_deal_stage arguments:', parseError);
       }
     }
   }
