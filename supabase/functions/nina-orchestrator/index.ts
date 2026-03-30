@@ -189,6 +189,30 @@ const cancelAppointmentTool = {
   }
 };
 
+// Tool definition for updating deal stage in pipeline
+const updateDealStageTool = {
+  type: "function",
+  function: {
+    name: "update_deal_stage",
+    description: "Atualizar o estágio do deal/negociação do cliente no pipeline de vendas. Use quando detectar que o cliente avançou no funil: demonstrou interesse, confirmou pedido, fez pagamento, etc. IMPORTANTE: Avalie a conversa e mova o lead para o estágio correto automaticamente.",
+    parameters: {
+      type: "object",
+      properties: {
+        stage_name: {
+          type: "string",
+          description: "Nome do estágio destino (ex: 'Em Qualificação', 'Pedido Montado', 'Aguardando Pagamento', 'Pagamento Efetuado', 'Perdido', 'Entrega', 'Pós-Venda', 'Reativação')"
+        },
+        motivo: {
+          type: "string",
+          description: "Motivo da mudança de estágio (ex: 'Cliente demonstrou interesse no produto X', 'Cliente confirmou pedido')"
+        }
+      },
+      required: ["stage_name", "motivo"],
+      additionalProperties: false
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
