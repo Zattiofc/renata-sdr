@@ -10,7 +10,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const GROUPING_DELAY_MS = 10000; // 10 seconds
+const GROUPING_DELAY_MS = 30000; // 30 seconds - window to group multiple messages
 
 serve(async (req) => {
   // Handle CORS preflight
