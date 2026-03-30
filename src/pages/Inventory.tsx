@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useInventory, InventoryItem } from '@/hooks/useInventory';
-import { Package, Plus, AlertTriangle, TrendingUp, Edit, Trash2, ArrowUpCircle, ArrowDownCircle, History } from 'lucide-react';
+import { Package, Plus, AlertTriangle, TrendingUp, Edit, Trash2, ArrowUpCircle, ArrowDownCircle, History, Upload, FileSpreadsheet, Loader2, Check } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
