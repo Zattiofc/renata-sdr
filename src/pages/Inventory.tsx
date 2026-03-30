@@ -20,6 +20,81 @@ const Inventory: React.FC = () => {
   const [movementItem, setMovementItem] = useState<InventoryItem | null>(null);
   const [form, setForm] = useState({ product_name: '', sku: '', category: 'geral', quantity: 0, min_quantity: 5, unit: 'un', price: 0, description: '' });
   const [movForm, setMovForm] = useState({ type: 'in', quantity: 1, reason: '' });
+  const [showImport, setShowImport] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<any[]>([]);
+  const [importInserting, setImportInserting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['.csv', '.xlsx', '.xls'];
+    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validTypes.includes(ext)) {
+      toast.error('Formato inválido. Use CSV, XLSX ou XLS.');
+      return;
+    }
+
+    setImporting(true);
+    setImportPreview([]);
+    setShowImport(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/import-inventory`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+      if (data.error) {
+        toast.error(data.error);
+        setShowImport(false);
+      } else if (data.products?.length > 0) {
+        setImportPreview(data.products);
+        toast.success(`${data.total} produtos encontrados na planilha`);
+      } else {
+        toast.error('Nenhum produto encontrado na planilha');
+        setShowImport(false);
+      }
+    } catch (err: any) {
+      toast.error('Erro ao processar arquivo: ' + err.message);
+      setShowImport(false);
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importPreview.length === 0) return;
+    setImportInserting(true);
+    try {
+      const { error } = await supabase.from('inventory').insert(importPreview as any);
+      if (error) throw error;
+      toast.success(`${importPreview.length} produtos importados com sucesso!`);
+      setShowImport(false);
+      setImportPreview([]);
+      // Refresh
+      window.location.reload();
+    } catch (err: any) {
+      toast.error('Erro ao importar: ' + err.message);
+    } finally {
+      setImportInserting(false);
+    }
+  };
 
   const resetForm = () => setForm({ product_name: '', sku: '', category: 'geral', quantity: 0, min_quantity: 5, unit: 'un', price: 0, description: '' });
 
