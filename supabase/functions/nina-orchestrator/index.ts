@@ -1854,6 +1854,22 @@ async function queueTextResponse(
   delay: number,
   appointmentCreated?: any
 ) {
+  // DEDUP: Check if we already have a pending/completed response for this message
+  const responseToMsgId = message.id;
+  const { data: existingResponse } = await supabase
+    .from('send_queue')
+    .select('id')
+    .eq('from_type', 'nina')
+    .filter('metadata->>response_to_message_id', 'eq', responseToMsgId)
+    .in('status', ['pending', 'processing', 'completed'])
+    .limit(1)
+    .maybeSingle();
+
+  if (existingResponse) {
+    console.log(`[Nina] Duplicate response detected for message ${responseToMsgId}, skipping`);
+    return;
+  }
+
   // Break message into chunks if enabled
   let messageChunks = settings?.message_breaking_enabled
     ? breakMessageIntoChunks(aiContent)
