@@ -1516,6 +1516,32 @@ Estágio atual do lead: ${currentStageName}
     console.error('[Nina] Pipeline context error (non-fatal):', pipeErr);
   }
 
+  // ===== INVENTORY CONTEXT =====
+  try {
+    const { data: lowStockProducts } = await supabase
+      .from('inventory')
+      .select('product_name, quantity, unit, min_quantity, category, price')
+      .eq('is_active', true)
+      .order('quantity', { ascending: true })
+      .limit(20);
+
+    if (lowStockProducts && lowStockProducts.length > 0) {
+      const lowStock = lowStockProducts.filter((p: any) => p.quantity <= p.min_quantity);
+      const categories = [...new Set(lowStockProducts.map((p: any) => p.category))];
+      finalPrompt += `\n\n<inventory_context>
+ESTOQUE — Você tem acesso ao estoque via ferramentas check_inventory e reserve_inventory.
+Categorias disponíveis: ${categories.join(', ')}
+Total de produtos ativos: ${lowStockProducts.length}
+${lowStock.length > 0 ? `⚠️ Produtos com estoque baixo: ${lowStock.map((p: any) => `${p.product_name} (${p.quantity} ${p.unit})`).join(', ')}` : 'Todos os produtos com estoque adequado.'}
+Quando o cliente perguntar sobre produtos, preços ou disponibilidade, use check_inventory.
+Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no estoque.
+</inventory_context>`;
+      console.log(`[Nina] Inventory context injected: ${lowStockProducts.length} products, ${lowStock.length} low stock`);
+    }
+  } catch (invErr) {
+    console.error('[Nina] Inventory context error (non-fatal):', invErr);
+  }
+
   // Debug: Log current date/time being used in prompt
   const nowBR = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   console.log('[Nina] Current date/time (BR):', nowBR);
