@@ -148,7 +148,7 @@ const Materials: React.FC = () => {
 
   const resetForm = () => {
     setFormData({
-      titulo: '', linha_negocio: 'humano', produto_relacionado: '', tipo: 'folheto',
+      titulo: '', linha_negocio: 'carnes', produto_relacionado: '', tipo: 'folheto',
       idioma: 'pt-BR', versao: '1.0', status: 'ativo', arquivo_url: '',
       thumbnail_url: '', tags: '', observacoes_uso: '',
     });
