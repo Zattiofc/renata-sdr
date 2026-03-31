@@ -6,7 +6,7 @@ import { api } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingWizard } from './OnboardingWizard';
-import { OnboardingBanner } from './OnboardingBanner';
+
 
 type PeriodFilter = 'today' | '7days' | '30days';
 
