@@ -359,10 +359,10 @@ serve(async (req) => {
           }
         }
 
-        // Use default settings if nothing found
+        // Use default settings if nothing found — SAFE DEFAULTS: agent OFF
         const effectiveSettings = settings || {
-          is_active: true,
-          auto_response_enabled: true,
+          is_active: false,
+          auto_response_enabled: false,
           system_prompt_override: null,
           ai_model_mode: 'flash',
           response_delay_min: 1000,
