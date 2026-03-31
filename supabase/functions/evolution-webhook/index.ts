@@ -473,6 +473,11 @@ function extractMessageContent(messageData: MessageData): { content: string; mes
     return { content: '', messageType: 'text', mediaUrl: null };
   }
 
+  // Filter out reaction messages — they are not real content
+  if (msg.reactionMessage || messageData.messageType === 'reactionMessage') {
+    return { content: '', messageType: 'reaction', mediaUrl: null };
+  }
+
   if (msg.conversation) {
     return { content: msg.conversation, messageType: 'text', mediaUrl: null };
   }
@@ -513,7 +518,13 @@ function extractMessageContent(messageData: MessageData): { content: string; mes
     };
   }
 
-  return { content: messageData.messageType || '', messageType: 'text', mediaUrl: null };
+  // Fallback — but avoid saving raw messageType strings as content
+  const fallbackContent = messageData.messageType || '';
+  if (['reactionMessage', 'protocolMessage', 'senderKeyDistributionMessage'].includes(fallbackContent)) {
+    return { content: '', messageType: 'reaction', mediaUrl: null };
+  }
+
+  return { content: fallbackContent, messageType: 'text', mediaUrl: null };
 }
 
 async function processMessageUpdate(
