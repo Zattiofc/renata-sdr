@@ -1267,7 +1267,7 @@ async function processQueueItem(
     return;
   }
 
-  // Get recent messages for context (last 20)
+  // Get recent messages for context (last 20) — persistent context window
   const { data: recentMessages } = await supabase
     .from('messages')
     .select('*')
@@ -1275,8 +1275,25 @@ async function processQueueItem(
     .order('sent_at', { ascending: false })
     .limit(20);
 
+  // Filter out garbage messages (reactions, empty, system artifacts)
+  const GARBAGE_CONTENT = new Set([
+    'reactionMessage', '[media]', '', null, undefined,
+    '[áudio - processando transcrição...]',
+  ]);
+
+  const cleanMessages = (recentMessages || []).filter((msg: any) => {
+    const content = (msg.content || '').trim();
+    if (GARBAGE_CONTENT.has(content)) return false;
+    if (content.length < 2 && msg.type === 'text') return false;
+    // Filter reaction messages by type too
+    if (msg.type === 'reaction') return false;
+    return true;
+  });
+
+  console.log(`[Nina] Messages: ${recentMessages?.length || 0} raw → ${cleanMessages.length} clean`);
+
   // Build conversation history for AI (with multimodal support for images)
-  const conversationHistory = (recentMessages || [])
+  const conversationHistory = cleanMessages
     .reverse()
     .map((msg: any) => {
       const role = msg.from_type === 'user' ? 'user' : 'assistant';
