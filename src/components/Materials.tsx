@@ -34,9 +34,9 @@ const LINHAS = [
 const TIPOS = [
   { value: 'folheto', label: 'Folheto' },
   { value: 'ficha_tecnica', label: 'Ficha Técnica' },
+  { value: 'cardapio', label: 'Cardápio' },
   { value: 'apresentacao', label: 'Apresentação' },
-  { value: 'exames', label: 'Exames' },
-  { value: 'institucional', label: 'Institucional' },
+  { value: 'promocional', label: 'Promocional' },
 ];
 
 const LINHA_COLORS: Record<string, string> = {
