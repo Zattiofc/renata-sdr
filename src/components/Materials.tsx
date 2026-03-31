@@ -25,10 +25,10 @@ interface OfficialMaterial {
 }
 
 const LINHAS = [
-  { value: 'humano', label: 'Humano' },
-  { value: 'veterinario', label: 'Veterinário' },
-  { value: 'servicos', label: 'Serviços' },
-  { value: 'hexai', label: 'HexAI' },
+  { value: 'carnes', label: 'Carnes' },
+  { value: 'acompanhamentos', label: 'Acompanhamentos' },
+  { value: 'combos', label: 'Combos' },
+  { value: 'institucional', label: 'Institucional' },
 ];
 
 const TIPOS = [
