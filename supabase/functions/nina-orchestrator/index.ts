@@ -380,13 +380,32 @@ serve(async (req) => {
 
         // Check if Nina is active for this user
         if (!effectiveSettings.is_active) {
-          console.log('[Nina] Nina is disabled for user:', conversation.user_id);
+          console.log('[Nina] ⛔ Agent DISABLED (is_active=false) for user:', conversation.user_id);
           await supabase
             .from('nina_processing_queue')
             .update({ 
               status: 'completed', 
               processed_at: new Date().toISOString(),
-              error_message: 'Nina disabled for this user'
+              error_message: 'Nina disabled (is_active=false)'
+            })
+            .eq('id', item.id);
+          continue;
+        }
+
+        // Check if auto-response is enabled (second guard)
+        if (!effectiveSettings.auto_response_enabled) {
+          console.log('[Nina] ⛔ Auto-response DISABLED for user:', conversation.user_id);
+          // Mark message as processed without generating response
+          await supabase
+            .from('messages')
+            .update({ processed_by_nina: true })
+            .eq('id', item.message_id);
+          await supabase
+            .from('nina_processing_queue')
+            .update({ 
+              status: 'completed', 
+              processed_at: new Date().toISOString(),
+              error_message: 'Auto-response disabled'
             })
             .eq('id', item.id);
           continue;
