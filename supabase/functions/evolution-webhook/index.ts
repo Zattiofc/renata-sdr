@@ -307,7 +307,7 @@ async function processMessageUpsert(
     .eq('id', conversation.id);
 
   // Calcular o novo process_after para agrupamento
-  const GROUPING_DELAY_MS = 30000; // 30 segundos - janela para agrupar múltiplas mensagens
+  const GROUPING_DELAY_MS = 8000; // 8 segundos - janela para agrupar múltiplas mensagens
   const processAfter = new Date(Date.now() + GROUPING_DELAY_MS).toISOString();
 
   // CORREÇÃO: Atualizar process_after de mensagens pendentes do mesmo telefone
