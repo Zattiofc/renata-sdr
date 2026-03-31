@@ -60,7 +60,7 @@ const Materials: React.FC = () => {
   // Form state
   const [formData, setFormData] = useState({
     titulo: '',
-    linha_negocio: 'humano',
+    linha_negocio: 'carnes',
     produto_relacionado: '',
     tipo: 'folheto',
     idioma: 'pt-BR',
