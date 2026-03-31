@@ -40,10 +40,10 @@ const TIPOS = [
 ];
 
 const LINHA_COLORS: Record<string, string> = {
-  humano: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  veterinario: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  servicos: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  hexai: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  carnes: 'bg-red-500/10 text-red-400 border-red-500/20',
+  acompanhamentos: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  combos: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  institucional: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
 };
 
 const Materials: React.FC = () => {
