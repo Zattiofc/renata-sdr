@@ -2113,7 +2113,37 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
     await queueTextResponse(supabase, conversation, message, aiContent, settings, aiSettings, delay, appointmentCreated);
   }
 
-  // Trigger whatsapp-sender
+  // === PERSISTENT MEMORY: Update resumo_vivo after each interaction ===
+  try {
+    const userMsg = (message.content || '').substring(0, 200);
+    const aiMsg = (aiContent || '').substring(0, 200);
+    const contactName = conversation.contact?.call_name || conversation.contact?.name || '';
+    
+    // Build concise summary entry
+    const now = new Date().toISOString().substring(0, 16);
+    const existingResumo = (conversation.contact?.resumo_vivo || '').trim();
+    
+    // Keep last ~5 interaction summaries to avoid growing too large
+    const existingLines = existingResumo.split('\n').filter((l: string) => l.trim());
+    const maxLines = 10;
+    const recentLines = existingLines.slice(-maxLines);
+    
+    // Add new interaction
+    recentLines.push(`[${now}] Lead: "${userMsg.substring(0, 80)}" → IA: "${aiMsg.substring(0, 80)}"`);
+    
+    // Keep only last maxLines
+    const updatedResumo = recentLines.slice(-maxLines).join('\n');
+    
+    await supabase
+      .from('contacts')
+      .update({ resumo_vivo: updatedResumo })
+      .eq('id', conversation.contact_id);
+    
+    console.log('[Nina] Updated resumo_vivo for contact:', conversation.contact_id);
+  } catch (resumoError) {
+    console.error('[Nina] Error updating resumo_vivo (non-fatal):', resumoError);
+  }
+
   try {
     const senderUrl = `${supabaseUrl}/functions/v1/whatsapp-sender`;
     console.log('[Nina] Triggering whatsapp-sender at:', senderUrl);
