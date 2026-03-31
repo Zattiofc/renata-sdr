@@ -1948,8 +1948,12 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
         } else if (product.quantity < args.quantity) {
           toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Estoque insuficiente para "${args.product_name}". Disponível: ${product.quantity} ${product.unit}.` });
         } else {
-          // Decrement
-          await supabase.from('inventory').update({ quantity: product.quantity - args.quantity }).eq('id', product.id);
+          const newQty = product.quantity - args.quantity;
+          const saleValue = Number(product.price) * args.quantity;
+          
+          // Decrement stock
+          await supabase.from('inventory').update({ quantity: newQty }).eq('id', product.id);
+          
           // Log movement
           await supabase.from('inventory_movements').insert({
             inventory_id: product.id,
@@ -1960,8 +1964,45 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
             conversation_id: conversation.id,
             created_by: 'nina',
           });
-          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `Reserva confirmada: ${args.quantity}x "${product.product_name}". Estoque restante: ${product.quantity - args.quantity} ${product.unit}.` });
-          console.log(`[Nina] Reserved ${args.quantity} of "${product.product_name}" for contact ${conversation.contact_id}`);
+
+          // Auto-update deal value and stage when a sale is made
+          try {
+            // Find the deal for this contact
+            const { data: deal } = await supabase
+              .from('deals')
+              .select('id, value, stage_id')
+              .eq('contact_id', conversation.contact_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (deal) {
+              const currentValue = Number(deal.value) || 0;
+              const updatedValue = currentValue + saleValue;
+
+              // Find "Pedido Montado" stage
+              const { data: pedidoStage } = await supabase
+                .from('pipeline_stages')
+                .select('id')
+                .ilike('title', '%pedido montado%')
+                .eq('is_active', true)
+                .maybeSingle();
+
+              const dealUpdate: Record<string, any> = { value: updatedValue };
+              if (pedidoStage) {
+                dealUpdate.stage_id = pedidoStage.id;
+                dealUpdate.stage = 'Pedido Montado';
+              }
+
+              await supabase.from('deals').update(dealUpdate).eq('id', deal.id);
+              console.log(`[Nina] 💰 Deal ${deal.id} updated: value=${updatedValue}, stage=Pedido Montado`);
+            }
+          } catch (dealErr) {
+            console.error('[Nina] Error updating deal after sale:', dealErr);
+          }
+
+          toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `✅ Reserva confirmada: ${args.quantity}x "${product.product_name}" (R$ ${saleValue.toFixed(2)}). Estoque restante: ${newQty} ${product.unit}.` });
+          console.log(`[Nina] Reserved ${args.quantity} of "${product.product_name}" (R$ ${saleValue.toFixed(2)}) for contact ${conversation.contact_id}`);
         }
       } catch (parseError) {
         console.error('[Nina] Error processing reserve_inventory:', parseError);
