@@ -340,7 +340,7 @@ const Materials: React.FC = () => {
               <div>
                 <label className="text-xs text-muted-foreground">Produto Relacionado</label>
                 <input value={formData.produto_relacionado} onChange={e => setFormData(p => ({ ...p, produto_relacionado: e.target.value }))}
-                  placeholder="Ex: Magnifico Open, S-Scan..."
+                  placeholder="Ex: Pastrami, Bacon Artesanal..."
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-3">
