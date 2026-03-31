@@ -155,8 +155,35 @@ serve(async (req) => {
           console.log(`[MessageGrouper] Updated audio message with transcription`);
         }
 
-        // If conversation is handled by Nina, queue for AI processing
+        // If conversation is handled by Nina, check if agent is active before queuing
         if (conversation.status === 'nina') {
+          // Check nina_settings to see if agent is active
+          const { data: agentSettings } = await supabase
+            .from('nina_settings')
+            .select('is_active, auto_response_enabled')
+            .limit(1)
+            .maybeSingle();
+          
+          if (agentSettings && agentSettings.is_active === false) {
+            console.log(`[MessageGrouper] Agent is DISABLED (is_active=false), skipping AI processing for ${phoneNumber}`);
+            // Mark queue items as processed
+            await supabase
+              .from('message_grouping_queue')
+              .update({ processed: true })
+              .in('id', messages.map(m => m.id));
+            processedCount += messages.length;
+            continue;
+          }
+
+          if (agentSettings && agentSettings.auto_response_enabled === false) {
+            console.log(`[MessageGrouper] Auto-response DISABLED, skipping AI processing for ${phoneNumber}`);
+            await supabase
+              .from('message_grouping_queue')
+              .update({ processed: true })
+              .in('id', messages.map(m => m.id));
+            processedCount += messages.length;
+            continue;
+          }
           const { data: queueResult, error: ninaQueueError } = await supabase
             .from('nina_processing_queue')
             .upsert({
