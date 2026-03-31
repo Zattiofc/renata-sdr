@@ -3005,6 +3005,22 @@ export type Database = {
           similarity: number
         }[]
       }
+      search_knowledge_chunks_text: {
+        Args: {
+          filter_category?: string
+          max_results?: number
+          search_query: string
+        }
+        Returns: {
+          category: string
+          chunk_index: number
+          content: string
+          file_id: string
+          id: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
       track_chunk_usage: {
         Args: { chunk_ids: string[]; quality?: string }
         Returns: undefined
