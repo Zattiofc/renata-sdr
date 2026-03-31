@@ -267,6 +267,14 @@ async function processMessageUpsert(
   // Extrair conteúdo da mensagem
   const { content, messageType, mediaUrl } = extractMessageContent(messageData);
 
+  // Skip reaction/protocol messages — they're not real content
+  if (messageType === 'reaction' || !content) {
+    console.log('[evolution-webhook] Skipping non-content message (reaction/protocol)');
+    return new Response(JSON.stringify({ status: 'skipped', reason: 'reaction_message' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
   // Check for duplicate message (prevent duplicate webhook deliveries)
   const { data: existingMsg } = await supabase
     .from('messages')
