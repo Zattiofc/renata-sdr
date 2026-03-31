@@ -1,0 +1,1 @@
+UPDATE knowledge_files SET status = 'ready', chunk_count = 22 WHERE id = '33d0a3b2-717a-4ada-8a94-6cc12a304203';
