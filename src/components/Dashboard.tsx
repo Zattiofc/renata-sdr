@@ -6,7 +6,7 @@ import { api } from '../services/api';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OnboardingWizard } from './OnboardingWizard';
-import { OnboardingBanner } from './OnboardingBanner';
+
 
 type PeriodFilter = 'today' | '7days' | '30days';
 
@@ -128,7 +128,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="p-6 space-y-8 overflow-y-auto h-full bg-background text-foreground custom-scrollbar">
       <OnboardingWizard isOpen={wizardOpen} onClose={() => setWizardOpen(false)} />
-      <OnboardingBanner onOpenWizard={() => setWizardOpen(true)} />
+      
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
