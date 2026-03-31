@@ -386,7 +386,7 @@ const Materials: React.FC = () => {
               <div>
                 <label className="text-xs text-muted-foreground">Tags (separadas por vírgula)</label>
                 <input value={formData.tags} onChange={e => setFormData(p => ({ ...p, tags: e.target.value }))}
-                  placeholder="musculoesquelético, corpo inteiro, alto campo..."
+                  placeholder="defumados, artesanal, premium..."
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm" />
               </div>
               <div>
