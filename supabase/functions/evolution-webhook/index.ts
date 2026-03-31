@@ -267,6 +267,14 @@ async function processMessageUpsert(
   // Extrair conteúdo da mensagem
   const { content, messageType, mediaUrl } = extractMessageContent(messageData);
 
+  // Skip reaction/protocol messages — they're not real content
+  if (messageType === 'reaction' || !content) {
+    console.log('[evolution-webhook] Skipping non-content message (reaction/protocol)');
+    return new Response(JSON.stringify({ status: 'skipped', reason: 'reaction_message' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
   // Check for duplicate message (prevent duplicate webhook deliveries)
   const { data: existingMsg } = await supabase
     .from('messages')
@@ -473,6 +481,11 @@ function extractMessageContent(messageData: MessageData): { content: string; mes
     return { content: '', messageType: 'text', mediaUrl: null };
   }
 
+  // Filter out reaction messages — they are not real content
+  if (msg.reactionMessage || messageData.messageType === 'reactionMessage') {
+    return { content: '', messageType: 'reaction', mediaUrl: null };
+  }
+
   if (msg.conversation) {
     return { content: msg.conversation, messageType: 'text', mediaUrl: null };
   }
@@ -513,7 +526,13 @@ function extractMessageContent(messageData: MessageData): { content: string; mes
     };
   }
 
-  return { content: messageData.messageType || '', messageType: 'text', mediaUrl: null };
+  // Fallback — but avoid saving raw messageType strings as content
+  const fallbackContent = messageData.messageType || '';
+  if (['reactionMessage', 'protocolMessage', 'senderKeyDistributionMessage'].includes(fallbackContent)) {
+    return { content: '', messageType: 'reaction', mediaUrl: null };
+  }
+
+  return { content: fallbackContent, messageType: 'text', mediaUrl: null };
 }
 
 async function processMessageUpdate(
