@@ -25,25 +25,25 @@ interface OfficialMaterial {
 }
 
 const LINHAS = [
-  { value: 'humano', label: 'Humano' },
-  { value: 'veterinario', label: 'Veterinário' },
-  { value: 'servicos', label: 'Serviços' },
-  { value: 'hexai', label: 'HexAI' },
+  { value: 'carnes', label: 'Carnes' },
+  { value: 'acompanhamentos', label: 'Acompanhamentos' },
+  { value: 'combos', label: 'Combos' },
+  { value: 'institucional', label: 'Institucional' },
 ];
 
 const TIPOS = [
   { value: 'folheto', label: 'Folheto' },
   { value: 'ficha_tecnica', label: 'Ficha Técnica' },
+  { value: 'cardapio', label: 'Cardápio' },
   { value: 'apresentacao', label: 'Apresentação' },
-  { value: 'exames', label: 'Exames' },
-  { value: 'institucional', label: 'Institucional' },
+  { value: 'promocional', label: 'Promocional' },
 ];
 
 const LINHA_COLORS: Record<string, string> = {
-  humano: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  veterinario: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  servicos: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  hexai: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  carnes: 'bg-red-500/10 text-red-400 border-red-500/20',
+  acompanhamentos: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  combos: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  institucional: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
 };
 
 const Materials: React.FC = () => {
@@ -60,7 +60,7 @@ const Materials: React.FC = () => {
   // Form state
   const [formData, setFormData] = useState({
     titulo: '',
-    linha_negocio: 'humano',
+    linha_negocio: 'carnes',
     produto_relacionado: '',
     tipo: 'folheto',
     idioma: 'pt-BR',
@@ -148,7 +148,7 @@ const Materials: React.FC = () => {
 
   const resetForm = () => {
     setFormData({
-      titulo: '', linha_negocio: 'humano', produto_relacionado: '', tipo: 'folheto',
+      titulo: '', linha_negocio: 'carnes', produto_relacionado: '', tipo: 'folheto',
       idioma: 'pt-BR', versao: '1.0', status: 'ativo', arquivo_url: '',
       thumbnail_url: '', tags: '', observacoes_uso: '',
     });
@@ -340,7 +340,7 @@ const Materials: React.FC = () => {
               <div>
                 <label className="text-xs text-muted-foreground">Produto Relacionado</label>
                 <input value={formData.produto_relacionado} onChange={e => setFormData(p => ({ ...p, produto_relacionado: e.target.value }))}
-                  placeholder="Ex: Magnifico Open, S-Scan..."
+                  placeholder="Ex: Pastrami, Bacon Artesanal..."
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -386,7 +386,7 @@ const Materials: React.FC = () => {
               <div>
                 <label className="text-xs text-muted-foreground">Tags (separadas por vírgula)</label>
                 <input value={formData.tags} onChange={e => setFormData(p => ({ ...p, tags: e.target.value }))}
-                  placeholder="musculoesquelético, corpo inteiro, alto campo..."
+                  placeholder="defumados, artesanal, premium..."
                   className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm" />
               </div>
               <div>
