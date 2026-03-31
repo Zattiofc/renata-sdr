@@ -1374,44 +1374,30 @@ async function processQueueItem(
   // Process template variables ({{ data_hora }}, {{ dia_semana }}, etc.)
   const processedPrompt = processPromptTemplate(enhancedSystemPrompt, conversation.contact);
 
-  // === ENHANCED RAG: Context-Aware Knowledge Injection ===
+  // === ENHANCED RAG: Dual-mode (embedding + text fallback) ===
   let finalPrompt = processedPrompt;
   let ragChunkIds: string[] = [];
   let ragSimilarities: number[] = [];
   try {
     const userMessageContent = message.content || '';
     if (userMessageContent.trim()) {
-      // Build enriched query: combine user message with conversation context for better retrieval
-      const lastMessages = (recentMessages || []).slice(0, 5).reverse()
+      const lastMessages = cleanMessages.slice(-5)
         .map((m: any) => m.content || '').filter((c: string) => c.length > 5);
       const conversationContext = lastMessages.join(' ').substring(0, 300);
       const enrichedQuery = `${userMessageContent} ${conversationContext}`.trim();
 
-      // Adaptive threshold: lower for longer conversations (more context available)
       const msgCount = conversationHistory.length;
       const adaptiveThreshold = msgCount > 10 ? 0.55 : msgCount > 5 ? 0.60 : 0.65;
 
-      const ragSession = new Supabase.ai.Session("gte-small");
-      const queryCandidates = [
-        {
-          label: 'enriched',
-          text: enrichedQuery,
-          thresholds: buildRagThresholds(adaptiveThreshold)
-        },
-        ...(enrichedQuery !== userMessageContent
-          ? [{ label: 'user-only', text: userMessageContent, thresholds: buildRagThresholds(Math.max(adaptiveThreshold - 0.1, 0.45)) }]
-          : [])
-      ];
-
       let knowledgeChunks: any[] = [];
 
-      for (const candidate of queryCandidates) {
-        if (!candidate.text.trim()) continue;
-
-        const queryEmbedding = await ragSession.run(candidate.text, { mean_pool: true, normalize: true });
+      // --- Strategy 1: Embedding-based search (if available) ---
+      try {
+        const ragSession = new (globalThis as any).Supabase.ai.Session("gte-small");
+        const queryEmbedding = await ragSession.run(enrichedQuery, { mean_pool: true, normalize: true });
         const queryArray = Array.from(queryEmbedding as Float32Array);
 
-        for (const threshold of candidate.thresholds) {
+        for (const threshold of buildRagThresholds(adaptiveThreshold)) {
           const { data, error: ragError } = await supabase
             .rpc('match_knowledge_chunks_enhanced', {
               query_embedding: queryArray,
@@ -1421,37 +1407,72 @@ async function processQueueItem(
             });
 
           if (ragError) {
-            console.error('[Nina] RAG query error:', ragError);
-            break;
+            console.error('[Nina] RAG embedding error:', ragError);
+            break; // Fall through to text search
           }
 
           const usefulChunks = (data || []).filter((chunk: any) => !isLowQualityKnowledgeChunk(chunk.content));
           if (usefulChunks.length > 0) {
             knowledgeChunks = usefulChunks;
-            console.log(
-              `[Nina] RAG fallback hit using ${candidate.label} query at threshold ${threshold} (${usefulChunks.length} chunks)`
-            );
+            console.log(`[Nina] RAG embedding hit at threshold ${threshold} (${usefulChunks.length} chunks)`);
             break;
           }
         }
+      } catch (embeddingError) {
+        console.error('[Nina] RAG embedding unavailable, falling back to text search:', (embeddingError as Error).message);
+      }
 
-        if (knowledgeChunks.length > 0) {
-          break;
+      // --- Strategy 2: Text-based search fallback ---
+      if (knowledgeChunks.length === 0) {
+        console.log('[Nina] RAG: Trying text-based fallback search...');
+        const { data: textChunks, error: textError } = await supabase
+          .rpc('search_knowledge_chunks_text', {
+            search_query: enrichedQuery.substring(0, 500),
+            max_results: 10,
+            filter_category: null
+          });
+
+        if (textError) {
+          console.error('[Nina] RAG text search error:', textError);
+        } else {
+          const usefulTextChunks = (textChunks || []).filter((chunk: any) => 
+            !isLowQualityKnowledgeChunk(chunk.content) && (chunk.similarity || 0) > 0.2
+          );
+          if (usefulTextChunks.length > 0) {
+            knowledgeChunks = usefulTextChunks;
+            console.log(`[Nina] RAG text fallback hit: ${usefulTextChunks.length} chunks`);
+          }
+        }
+
+        // --- Strategy 3: If still nothing, try just the user message ---
+        if (knowledgeChunks.length === 0 && enrichedQuery !== userMessageContent) {
+          const { data: directChunks } = await supabase
+            .rpc('search_knowledge_chunks_text', {
+              search_query: userMessageContent.substring(0, 300),
+              max_results: 8,
+              filter_category: null
+            });
+          const usefulDirect = (directChunks || []).filter((chunk: any) => 
+            !isLowQualityKnowledgeChunk(chunk.content) && (chunk.similarity || 0) > 0.15
+          );
+          if (usefulDirect.length > 0) {
+            knowledgeChunks = usefulDirect;
+            console.log(`[Nina] RAG direct text hit: ${usefulDirect.length} chunks`);
+          }
         }
       }
 
       if (knowledgeChunks.length > 0) {
-        // Re-rank: boost chunks with higher effectiveness scores and prioritize by category relevance
         const reranked = knowledgeChunks
           .map((chunk: any) => ({
             ...chunk,
-            final_score: chunk.similarity + (chunk.effectiveness_score || 0) * 0.15
+            final_score: (chunk.similarity || 0.5) + (chunk.effectiveness_score || 0) * 0.15
           }))
           .sort((a: any, b: any) => b.final_score - a.final_score)
           .slice(0, 5);
 
         ragChunkIds = reranked.map((c: any) => c.id);
-        ragSimilarities = reranked.map((c: any) => c.similarity);
+        ragSimilarities = reranked.map((c: any) => c.similarity || 0.5);
 
         const knowledgeContext = reranked
           .map((chunk: any) => {
@@ -1471,7 +1492,7 @@ INSTRUÇÕES DE USO DO CONTEXTO:
 ${knowledgeContext}
 </knowledge_context>`;
         
-        console.log(`[Nina] RAG Enhanced: Injected ${reranked.length}/${knowledgeChunks.length} chunks (threshold: ${adaptiveThreshold}, scores: ${reranked.map((c: any) => c.final_score.toFixed(2)).join(', ')})`);
+        console.log(`[Nina] RAG: Injected ${reranked.length} chunks (scores: ${reranked.map((c: any) => (c.final_score || 0).toFixed(2)).join(', ')})`);
 
         // Track chunk usage asynchronously
         supabase.rpc('track_chunk_usage', { chunk_ids: ragChunkIds, quality: 'neutral' })
@@ -1479,7 +1500,7 @@ ${knowledgeContext}
           .catch((e: any) => console.error('[Nina] RAG tracking error:', e));
 
       } else {
-        console.log(`[Nina] RAG: No relevant chunks found (threshold: ${adaptiveThreshold})`);
+        console.log(`[Nina] RAG: No relevant chunks found via any strategy`);
       }
     }
   } catch (ragError) {
