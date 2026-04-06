@@ -2806,19 +2806,31 @@ function getModelSettings(
   contact: any,
   clientMemory: any
 ): { model: string; temperature: number } {
+  // Use the model configured in nina_settings directly
+  const configuredModel = settings?.ai_model_name || '';
+  // Strip provider prefix if present (e.g. "google/gemini-..." → "gemini-...")
+  const cleanModel = configuredModel.includes('/') ? configuredModel.split('/').pop() : configuredModel;
+  
   const modelMode = settings?.ai_model_mode || 'flash';
   
+  if (modelMode === 'adaptive') {
+    return getAdaptiveSettings(conversationHistory, message, contact, clientMemory);
+  }
+
+  // Use the configured model, with fallbacks per mode
+  if (cleanModel) {
+    return { model: cleanModel, temperature: 0.7 };
+  }
+
   switch (modelMode) {
     case 'flash':
-      return { model: 'google/gemini-3-flash-preview', temperature: 0.7 };
+      return { model: 'gemini-2.5-flash', temperature: 0.7 };
     case 'pro':
-      return { model: 'google/gemini-2.5-pro', temperature: 0.7 };
+      return { model: 'gemini-2.5-pro', temperature: 0.7 };
     case 'pro3':
-      return { model: 'google/gemini-3-pro-preview', temperature: 0.7 };
-    case 'adaptive':
-      return getAdaptiveSettings(conversationHistory, message, contact, clientMemory);
+      return { model: 'gemini-2.5-pro', temperature: 0.7 };
     default:
-      return { model: 'google/gemini-3-flash-preview', temperature: 0.7 };
+      return { model: 'gemini-2.5-flash', temperature: 0.7 };
   }
 }
 

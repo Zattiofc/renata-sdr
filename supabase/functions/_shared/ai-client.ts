@@ -169,10 +169,15 @@ export function getAIConfigFromSettings(settings: any): AIClientConfig {
   const apiKey = settings.ai_api_key || '';
   let model = settings.ai_model_name || '';
 
+  // Strip provider prefixes (e.g. "google/gemini-..." → "gemini-...")
+  if (model.includes('/')) {
+    model = model.split('/').pop() || model;
+  }
+
   // Fallback model per provider if not set
   if (!model) {
     switch (provider) {
-      case 'openai': model = 'gpt-5.4-mini'; break;
+      case 'openai': model = 'gpt-5-mini'; break;
       case 'google': model = 'gemini-2.5-flash'; break;
       case 'anthropic': model = 'claude-sonnet-4-6'; break;
       default: model = 'gemini-2.5-flash';
