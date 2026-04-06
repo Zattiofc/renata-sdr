@@ -441,6 +441,7 @@ const ChatInterface: React.FC = () => {
   }
 
   return (
+    <>
     <div ref={containerRef} className="flex h-full bg-background rounded-tl-2xl overflow-hidden border-t border-l border-border shadow-2xl">
       
       {/* Left Sidebar: Chat List */}
