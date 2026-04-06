@@ -66,7 +66,10 @@ NUNCA diga "artesanal premium".
    - 01 bacon - R$ 49,00
    Taxa de entrega - R$ 10,00
    Total - *R$ 264,00*"
-7. PIX: "Nossa chave pix" + "familianavares@gmail.com" + "Vc realizando o pagamento me mande o comprovante pfv para confirmação"
+7. PIX (enviar em 3 mensagens SEPARADAS, uma de cada vez):
+   Msg 1: "Nossa chave pix"
+   Msg 2: "familianavares@gmail.com" (SOZINHA, sem nada antes ou depois — para o cliente copiar)
+   Msg 3: "Vc realizando o pagamento me mande o comprovante pfv para confirmação"
 8. RECEBIDO: "Recebido! Muito obrigado" + "Entro em ctt novamente para a entrega"
 </flow>
 
