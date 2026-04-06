@@ -9,6 +9,18 @@ const corsHeaders = {
 };
 
 const ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech";
+const MAX_QUEUE_ITEM_AGE_MS = 5 * 60 * 1000;
+
+function getQueueItemAgeMs(createdAt?: string | null) {
+  if (!createdAt) return 0;
+
+  const createdAtMs = new Date(createdAt).getTime();
+  return Number.isNaN(createdAtMs) ? 0 : Date.now() - createdAtMs;
+}
+
+function isQueueItemStale(createdAt?: string | null) {
+  return getQueueItemAgeMs(createdAt) > MAX_QUEUE_ITEM_AGE_MS;
+}
 
 // Tool definition for saving client's preferred name
 const setCallNameTool = {
@@ -296,6 +308,31 @@ serve(async (req) => {
 
     for (const item of queueItems) {
       try {
+        const queueAgeMs = getQueueItemAgeMs(item.created_at);
+
+        if (isQueueItemStale(item.created_at)) {
+          const staleSeconds = Math.max(1, Math.round(queueAgeMs / 1000));
+          console.log(
+            `[Nina] Skipping stale queue item ${item.id} for message ${item.message_id} (${staleSeconds}s old)`
+          );
+
+          await supabase
+            .from('messages')
+            .update({ processed_by_nina: true })
+            .eq('id', item.message_id);
+
+          await supabase
+            .from('nina_processing_queue')
+            .update({
+              status: 'completed',
+              processed_at: new Date().toISOString(),
+              error_message: `Skipped stale queue item after ${staleSeconds}s`
+            })
+            .eq('id', item.id);
+
+          continue;
+        }
+
         // Get user_id from conversation to fetch correct settings
         const { data: conversation } = await supabase
           .from('conversations')

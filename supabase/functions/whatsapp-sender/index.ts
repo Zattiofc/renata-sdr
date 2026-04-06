@@ -7,6 +7,53 @@ const corsHeaders = {
 };
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v18.0";
+const MAX_SEND_QUEUE_AGE_MS = 5 * 60 * 1000;
+
+function getQueueItemAgeMs(createdAt?: string | null) {
+  if (!createdAt) return 0;
+
+  const createdAtMs = new Date(createdAt).getTime();
+  return Number.isNaN(createdAtMs) ? 0 : Date.now() - createdAtMs;
+}
+
+async function getStaleSendReason(supabase: any, queueItem: any): Promise<string | null> {
+  const queueAgeMs = getQueueItemAgeMs(queueItem.created_at);
+
+  if (queueAgeMs > MAX_SEND_QUEUE_AGE_MS) {
+    return `Skipped stale send queue item after ${Math.max(1, Math.round(queueAgeMs / 1000))}s`;
+  }
+
+  const responseToMessageId = queueItem.metadata?.response_to_message_id;
+  if (!responseToMessageId || !queueItem.conversation_id) {
+    return null;
+  }
+
+  const { data: sourceMessage } = await supabase
+    .from('messages')
+    .select('sent_at')
+    .eq('id', responseToMessageId)
+    .maybeSingle();
+
+  if (!sourceMessage?.sent_at) {
+    return null;
+  }
+
+  const { data: newerUserMessage } = await supabase
+    .from('messages')
+    .select('id')
+    .eq('conversation_id', queueItem.conversation_id)
+    .eq('from_type', 'user')
+    .gt('sent_at', sourceMessage.sent_at)
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!newerUserMessage) {
+    return null;
+  }
+
+  return `Skipped stale send queue item because newer user message ${newerUserMessage.id} already exists`;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -98,6 +145,22 @@ serve(async (req) => {
 
       for (const item of queueItems) {
         try {
+          const staleReason = await getStaleSendReason(supabase, item);
+
+          if (staleReason) {
+            console.log(`[Sender] ${staleReason}: ${item.id}`);
+
+            await supabase
+              .from('send_queue')
+              .update({
+                status: 'completed',
+                error_message: staleReason,
+              })
+              .eq('id', item.id);
+
+            continue;
+          }
+
           // Verificar se tem instance_id (Evolution API) ou usar nina_settings (API Oficial)
           if (item.instance_id) {
             await sendViaEvolution(supabase, item, instanceSecretsCache);
