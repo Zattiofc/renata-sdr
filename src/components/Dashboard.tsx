@@ -238,7 +238,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Secondary Chart */}
-        <div className="col-span-3 rounded-2xl border border-border bg-card backdrop-blur-sm p-6 shadow-md flex flex-col">
+        <div className="col-span-1 md:col-span-3 rounded-2xl border border-border bg-card backdrop-blur-sm p-4 md:p-6 shadow-md flex flex-col">
            <div className="mb-6">
             <h3 className="text-lg font-semibold text-foreground">Conversões</h3>
             <p className="text-sm text-muted-foreground">Reuniões, vendas e ações concluídas</p>
