@@ -1,0 +1,1 @@
+UPDATE public.nina_settings SET ai_model_name = 'gemini-2.5-flash' WHERE ai_model_name = 'gemini-3.1-flash-lite-preview';
