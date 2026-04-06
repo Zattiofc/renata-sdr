@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAI, getAIConfigFromSettings } from "../_shared/ai-client.ts";
+import { splitMessageIntoChunks as chunkOutboundMessage } from "../_shared/message-chunking.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -2795,12 +2796,7 @@ ${contact.resumo_vivo}
 }
 
 function breakMessageIntoChunks(content: string): string[] {
-  const chunks = content
-    .split(/\n\n+/)
-    .map(chunk => chunk.trim())
-    .filter(chunk => chunk.length > 0);
-  
-  return chunks.length > 0 ? chunks : [content];
+  return chunkOutboundMessage(content);
 }
 
 function getModelSettings(

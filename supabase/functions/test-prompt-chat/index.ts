@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { splitMessageIntoChunks } from "../_shared/message-chunking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,8 +84,9 @@ serve(async (req) => {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
+    const chunks = splitMessageIntoChunks(content);
 
-    return new Response(JSON.stringify({ response: content }), {
+    return new Response(JSON.stringify({ response: content, chunks }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
