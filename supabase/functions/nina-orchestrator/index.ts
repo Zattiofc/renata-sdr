@@ -2307,6 +2307,10 @@ function sanitizeResponseForClient(content: string): string {
 const DEFAULT_PIX_KEY = 'familianavares@gmail.com';
 const CANONICAL_PIX_LABEL = 'Nossa chave PIX:';
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function extractPixKeyFromPrompt(prompt: string | null | undefined): string | null {
   if (!prompt) return null;
 
@@ -2335,12 +2339,26 @@ function enforcePixGuardrail(content: string, promptContext?: string): string {
 
   if (hasPixLabel) {
     normalized = normalized.replace(/(?:nossa\s+)?chave\s+pix\s*:?/gi, CANONICAL_PIX_LABEL);
+  } else if (hasRequiredPixKey) {
+    const keyPattern = new RegExp(escapeRegex(pixKey), 'i');
+    normalized = normalized.replace(keyPattern, `${CANONICAL_PIX_LABEL}\n${pixKey}`);
   } else {
-    normalized = `${normalized}\n\n${CANONICAL_PIX_LABEL}`;
+    normalized = `${normalized}\n\n${CANONICAL_PIX_LABEL}\n${pixKey}`;
+    console.log('[Nina] PIX guardrail appended label + PIX key');
+    return normalized.replace(/\n{3,}/g, '\n\n').trim();
   }
 
   if (!hasRequiredPixKey) {
-    normalized = `${normalized}\n\n${pixKey}`;
+    const lines = normalized.split('\n');
+    const pixLabelLineIndex = lines.findIndex((line) => /(?:nossa\s+)?chave\s+pix/i.test(line));
+
+    if (pixLabelLineIndex >= 0) {
+      lines.splice(pixLabelLineIndex + 1, 0, pixKey);
+      normalized = lines.join('\n');
+    } else {
+      normalized = `${normalized}\n${pixKey}`;
+    }
+
     console.log('[Nina] PIX guardrail appended missing PIX key');
   }
 
