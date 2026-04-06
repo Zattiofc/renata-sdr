@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v18.0";
 const MAX_SEND_QUEUE_AGE_MS = 5 * 60 * 1000;
+const MAX_SEND_QUEUE_AGE_RETRY_MS = 30 * 60 * 1000; // 30 min for retried messages
 
 function getQueueItemAgeMs(createdAt?: string | null) {
   if (!createdAt) return 0;
