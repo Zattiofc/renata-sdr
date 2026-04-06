@@ -705,18 +705,34 @@ const ChatInterface: React.FC = () => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
+                      onClick={() => setClearChatConfirm(true)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Eraser className="w-4 h-4" />
+                      Limpar chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setShowAddContact(true)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Adicionar contato
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
                       onClick={async () => {
+                        const isBlocked = activeChat.isBlocked;
                         try {
-                          await api.toggleContactBlock(activeChat.contactId, true, 'Bloqueado manualmente pelo agente');
-                          toast.success('Contato bloqueado');
+                          await api.toggleContactBlock(activeChat.contactId, !isBlocked, isBlocked ? undefined : 'Bloqueado manualmente pelo agente');
+                          toast.success(isBlocked ? 'Contato desbloqueado' : 'Contato bloqueado');
                         } catch {
-                          toast.error('Erro ao bloquear contato');
+                          toast.error('Erro ao alterar bloqueio');
                         }
                       }}
-                      className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                      className={`gap-2 cursor-pointer ${!activeChat.isBlocked ? 'text-destructive focus:text-destructive' : ''}`}
                     >
                       <Ban className="w-4 h-4" />
-                      Bloquear contato
+                      {activeChat.isBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
