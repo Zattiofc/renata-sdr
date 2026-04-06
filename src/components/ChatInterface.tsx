@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Search, MoreVertical, Phone, Paperclip, Send, Check, CheckCheck, 
   Smile, Play, Loader2, MessageSquare, Info, X, Mail, 
-  Tag, Bot, User, Pause, Brain, Plus, Copy, Ban, PhoneOff, UserCheck, Wifi, Zap
+  Tag, Bot, User, Pause, Brain, Plus, Copy, Ban, PhoneOff, UserCheck, Wifi, Zap, Trash2, Eraser, UserPlus
 } from 'lucide-react';
 import { MessageDirection, MessageType, UIConversation, UIMessage, ConversationStatus, TagDefinition } from '../types';
 import { Button } from './Button';
@@ -19,6 +19,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import AddContactModal from './AddContactModal';
 
 const ChatInterface: React.FC = () => {
   const { conversations, loading, sendMessage, updateStatus, markAsRead, assignConversation } = useConversations();
@@ -34,6 +45,9 @@ const ChatInterface: React.FC = () => {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [notesValue, setNotesValue] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [clearChatConfirm, setClearChatConfirm] = useState(false);
+  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
 
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -195,6 +209,27 @@ const ChatInterface: React.FC = () => {
     setInputText('');
     
     await sendMessage(activeChat.id, content);
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await api.deleteMessage(messageId);
+      toast.success('Mensagem apagada');
+      setDeleteMessageId(null);
+    } catch {
+      toast.error('Erro ao apagar mensagem');
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!activeChat) return;
+    try {
+      await api.clearChat(activeChat.id);
+      toast.success('Chat limpo com sucesso');
+      setClearChatConfirm(false);
+    } catch {
+      toast.error('Erro ao limpar chat');
+    }
   };
 
   const handleStatusChange = async (status: ConversationStatus) => {
@@ -406,6 +441,7 @@ const ChatInterface: React.FC = () => {
   }
 
   return (
+    <>
     <div ref={containerRef} className="flex h-full bg-background rounded-tl-2xl overflow-hidden border-t border-l border-border shadow-2xl">
       
       {/* Left Sidebar: Chat List */}
@@ -670,6 +706,21 @@ const ChatInterface: React.FC = () => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
+                      onClick={() => setClearChatConfirm(true)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Eraser className="w-4 h-4" />
+                      Limpar chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setShowAddContact(true)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Adicionar contato
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
                       onClick={async () => {
                         try {
                           await api.toggleContactBlock(activeChat.contactId, true, 'Bloqueado manualmente pelo agente');
@@ -682,6 +733,20 @@ const ChatInterface: React.FC = () => {
                     >
                       <Ban className="w-4 h-4" />
                       Bloquear contato
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        try {
+                          await api.toggleContactBlock(activeChat.contactId, false);
+                          toast.success('Contato desbloqueado');
+                        } catch {
+                          toast.error('Erro ao desbloquear contato');
+                        }
+                      }}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      Desbloquear contato
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -707,16 +772,25 @@ const ChatInterface: React.FC = () => {
                     return (
                       <div key={msg.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                         <div className={`flex flex-col max-w-[75%] ${isOutgoing ? 'items-end' : 'items-start'}`}>
-                          <div 
-                            className={`px-5 py-3 rounded-2xl shadow-md relative text-sm leading-relaxed ${
-                              isOutgoing 
-                                ? msg.fromType === 'nina'
-                                  ? 'bg-gradient-to-br from-violet-500 to-violet-600 text-white rounded-tr-sm shadow-violet-500/20'
-                                  : 'bg-gradient-to-br from-primary to-accent text-white rounded-tr-sm shadow-primary/20'
-                                : 'bg-muted text-foreground rounded-tl-sm border border-border'
-                            }`}
-                          >
-                            {renderMessageContent(msg)}
+                          <div className={`relative ${isOutgoing ? 'flex-row-reverse' : 'flex-row'} flex items-center gap-1`}>
+                            <div 
+                              className={`px-5 py-3 rounded-2xl shadow-md relative text-sm leading-relaxed ${
+                                isOutgoing 
+                                  ? msg.fromType === 'nina'
+                                    ? 'bg-gradient-to-br from-violet-500 to-violet-600 text-white rounded-tr-sm shadow-violet-500/20'
+                                    : 'bg-gradient-to-br from-primary to-accent text-white rounded-tr-sm shadow-primary/20'
+                                  : 'bg-muted text-foreground rounded-tl-sm border border-border'
+                              }`}
+                            >
+                              {renderMessageContent(msg)}
+                            </div>
+                            <button
+                              onClick={() => setDeleteMessageId(msg.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex-shrink-0"
+                              title="Apagar mensagem"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                           
                           <div className="flex items-center mt-1.5 gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity px-1">
@@ -1098,6 +1172,53 @@ const ChatInterface: React.FC = () => {
         </div>
       )}
     </div>
+
+      {/* Delete Message Confirmation */}
+      <AlertDialog open={!!deleteMessageId} onOpenChange={() => setDeleteMessageId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar mensagem</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja apagar esta mensagem? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteMessageId && handleDeleteMessage(deleteMessageId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Chat Confirmation */}
+      <AlertDialog open={clearChatConfirm} onOpenChange={setClearChatConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar chat</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja apagar TODAS as mensagens desta conversa? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Limpar tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add Contact Modal */}
+      <AddContactModal
+        open={showAddContact}
+        onClose={() => setShowAddContact(false)}
+        onSuccess={() => {
+          setShowAddContact(false);
+          toast.success('Contato adicionado com sucesso!');
+        }}
+      />
+    </>
   );
 };
 
