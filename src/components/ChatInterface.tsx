@@ -1171,6 +1171,53 @@ const ChatInterface: React.FC = () => {
         </div>
       )}
     </div>
+
+      {/* Delete Message Confirmation */}
+      <AlertDialog open={!!deleteMessageId} onOpenChange={() => setDeleteMessageId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar mensagem</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja apagar esta mensagem? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteMessageId && handleDeleteMessage(deleteMessageId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Chat Confirmation */}
+      <AlertDialog open={clearChatConfirm} onOpenChange={setClearChatConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar chat</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja apagar TODAS as mensagens desta conversa? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Limpar tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add Contact Modal */}
+      <AddContactModal
+        open={showAddContact}
+        onClose={() => setShowAddContact(false)}
+        onSuccess={() => {
+          setShowAddContact(false);
+          toast.success('Contato adicionado com sucesso!');
+        }}
+      />
+    </>
   );
 };
 
