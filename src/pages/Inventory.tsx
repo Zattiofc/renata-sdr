@@ -121,8 +121,8 @@ const Inventory: React.FC = () => {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Package className="w-6 h-6 text-primary" /> Estoque
