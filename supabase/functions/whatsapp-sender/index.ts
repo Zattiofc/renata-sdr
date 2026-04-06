@@ -193,9 +193,16 @@ serve(async (req) => {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`[Sender] Error sending item ${item.id}:`, error);
           
-          // Mark as failed with retry
+          // Mark as failed with retry - more retries for connection issues
           const newRetryCount = (item.retry_count || 0) + 1;
-          const shouldRetry = newRetryCount < 3;
+          const isConnectionError = errorMessage.includes('not connected') || errorMessage.includes('connecting');
+          const maxRetries = isConnectionError ? 10 : 3;
+          const shouldRetry = newRetryCount < maxRetries;
+          
+          // Shorter retry delay for connection issues (30s), normal for others
+          const retryDelay = isConnectionError 
+            ? Math.min(newRetryCount * 30000, 120000) // 30s, 60s, 90s, max 120s
+            : newRetryCount * 60000; // 1min, 2min, 3min
           
           await supabase
             .from('send_queue')
@@ -204,7 +211,7 @@ serve(async (req) => {
               retry_count: newRetryCount,
               error_message: errorMessage,
               scheduled_at: shouldRetry 
-                ? new Date(Date.now() + newRetryCount * 60000).toISOString() 
+                ? new Date(Date.now() + retryDelay).toISOString() 
                 : null
             })
             .eq('id', item.id);
