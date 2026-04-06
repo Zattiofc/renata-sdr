@@ -721,18 +721,31 @@ const ChatInterface: React.FC = () => {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={async () => {
-                        const isBlocked = activeChat.isBlocked;
                         try {
-                          await api.toggleContactBlock(activeChat.contactId, !isBlocked, isBlocked ? undefined : 'Bloqueado manualmente pelo agente');
-                          toast.success(isBlocked ? 'Contato desbloqueado' : 'Contato bloqueado');
+                          await api.toggleContactBlock(activeChat.contactId, true, 'Bloqueado manualmente pelo agente');
+                          toast.success('Contato bloqueado');
                         } catch {
-                          toast.error('Erro ao alterar bloqueio');
+                          toast.error('Erro ao bloquear contato');
                         }
                       }}
-                      className={`gap-2 cursor-pointer ${!activeChat.isBlocked ? 'text-destructive focus:text-destructive' : ''}`}
+                      className="gap-2 cursor-pointer text-destructive focus:text-destructive"
                     >
                       <Ban className="w-4 h-4" />
-                      {activeChat.isBlocked ? 'Desbloquear contato' : 'Bloquear contato'}
+                      Bloquear contato
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        try {
+                          await api.toggleContactBlock(activeChat.contactId, false);
+                          toast.success('Contato desbloqueado');
+                        } catch {
+                          toast.error('Erro ao desbloquear contato');
+                        }
+                      }}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      Desbloquear contato
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
