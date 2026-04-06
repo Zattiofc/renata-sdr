@@ -2937,6 +2937,8 @@ export type Database = {
       }
       cleanup_processed_message_queue: { Args: never; Returns: undefined }
       cleanup_processed_queues: { Args: never; Returns: undefined }
+      execute_mutation_query: { Args: { sql_query: string }; Returns: Json }
+      execute_readonly_query: { Args: { sql_query: string }; Returns: Json }
       get_auth_user_id: { Args: never; Returns: string }
       get_next_closer: {
         Args: never
