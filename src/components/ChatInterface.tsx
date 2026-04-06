@@ -45,6 +45,9 @@ const ChatInterface: React.FC = () => {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [notesValue, setNotesValue] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [clearChatConfirm, setClearChatConfirm] = useState(false);
+  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
 
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState(320);
