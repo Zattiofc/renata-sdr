@@ -1,6 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callAI, getAIConfigFromSettings } from "../_shared/ai-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,21 +33,9 @@ serve(async (req) => {
   try {
     const { messages, systemPrompt } = await req.json();
     
-    // Get AI config from nina_settings
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    const { data: settings } = await supabase
-      .from('nina_settings')
-      .select('ai_provider, ai_api_key, ai_model_name')
-      .limit(1)
-      .maybeSingle();
-    
-    const aiConfig = getAIConfigFromSettings(settings || {});
-    
-    if (!aiConfig.apiKey) {
-      return new Response(JSON.stringify({ error: "API Key do provedor de IA não configurada. Vá em Configurações > Agente para configurar." }), {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY não configurada." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -57,11 +43,21 @@ serve(async (req) => {
 
     const processedPrompt = replacePromptVariables(systemPrompt || "");
 
-    const response = await callAI(aiConfig, {
-      messages: [
-        { role: "system", content: processedPrompt },
-        ...messages,
-      ],
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: processedPrompt },
+          ...messages,
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+      }),
     });
 
     if (!response.ok) {
@@ -71,8 +67,14 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Créditos esgotados. Adicione fundos na sua conta." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const text = await response.text();
-      console.error("AI error:", response.status, text);
+      console.error("AI Gateway error:", response.status, text);
       return new Response(JSON.stringify({ error: "Erro ao conectar com a IA" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
