@@ -27,6 +27,10 @@ const AIAssistant: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)); } catch {}
+  }, [messages]);
+
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || isLoading) return;
