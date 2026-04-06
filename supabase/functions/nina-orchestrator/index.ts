@@ -2041,6 +2041,51 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
 
           toolResultsForSecondPass.push({ name: 'reserve_inventory', result: `✅ Reserva confirmada: ${args.quantity}x "${product.product_name}" (R$ ${saleValue.toFixed(2)}). Estoque restante: ${newQty} ${product.unit}.` });
           console.log(`[Nina] Reserved ${args.quantity} of "${product.product_name}" (R$ ${saleValue.toFixed(2)}) for contact ${conversation.contact_id}`);
+
+          // === NOTIFY LEO NVS about the order ===
+          try {
+            const contactName = conversation.contact?.call_name || conversation.contact?.name || conversation.contact?.phone_number || 'Desconhecido';
+            const contactPhone = conversation.contact?.phone_number || 'N/A';
+            const orderSummary = `📋 *NOVO PEDIDO*\n\n` +
+              `👤 Cliente: ${contactName}\n` +
+              `📱 Telefone: ${contactPhone}\n` +
+              `📦 Produto: ${product.product_name}\n` +
+              `🔢 Quantidade: ${args.quantity} ${product.unit}\n` +
+              `💰 Valor: R$ ${saleValue.toFixed(2)}\n` +
+              `📅 Data: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Campo_Grande' })}\n` +
+              `\n🔔 Processar este pedido.`;
+
+            // Find the default WhatsApp instance
+            const { data: defaultInstance } = await supabase
+              .from('whatsapp_instances')
+              .select('id')
+              .eq('is_default', true)
+              .eq('status', 'connected')
+              .maybeSingle();
+
+            if (defaultInstance) {
+              const LEO_NVS_PHONE = '556796089989';
+              const sendUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-evolution-message`;
+              fetch(sendUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+                },
+                body: JSON.stringify({
+                  instance_id: defaultInstance.id,
+                  phone_number: LEO_NVS_PHONE,
+                  content: orderSummary,
+                  message_type: 'text'
+                })
+              }).catch(err => console.error('[Nina] Error notifying Leo NVS:', err));
+              console.log('[Nina] 📨 Order notification sent to Leo NVS');
+            } else {
+              console.warn('[Nina] No default connected instance to notify Leo NVS');
+            }
+          } catch (notifyErr) {
+            console.error('[Nina] Error sending order notification (non-fatal):', notifyErr);
+          }
         }
       } catch (parseError) {
         console.error('[Nina] Error processing reserve_inventory:', parseError);
