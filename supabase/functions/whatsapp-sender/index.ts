@@ -17,6 +17,11 @@ function getQueueItemAgeMs(createdAt?: string | null) {
 }
 
 async function getStaleSendReason(supabase: any, queueItem: any): Promise<string | null> {
+  const isAiReply = queueItem.from_type === 'nina' || !!queueItem.metadata?.response_to_message_id;
+  if (!isAiReply) {
+    return null;
+  }
+
   const queueAgeMs = getQueueItemAgeMs(queueItem.created_at);
 
   if (queueAgeMs > MAX_SEND_QUEUE_AGE_MS) {
