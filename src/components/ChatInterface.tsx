@@ -742,16 +742,26 @@ const ChatInterface: React.FC = () => {
                     return (
                       <div key={msg.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                         <div className={`flex flex-col max-w-[75%] ${isOutgoing ? 'items-end' : 'items-start'}`}>
-                          <div 
-                            className={`px-5 py-3 rounded-2xl shadow-md relative text-sm leading-relaxed ${
-                              isOutgoing 
-                                ? msg.fromType === 'nina'
-                                  ? 'bg-gradient-to-br from-violet-500 to-violet-600 text-white rounded-tr-sm shadow-violet-500/20'
-                                  : 'bg-gradient-to-br from-primary to-accent text-white rounded-tr-sm shadow-primary/20'
-                                : 'bg-muted text-foreground rounded-tl-sm border border-border'
-                            }`}
-                          >
-                            {renderMessageContent(msg)}
+                          <div className={`relative ${isOutgoing ? 'flex-row-reverse' : 'flex-row'} flex items-center gap-1`}>
+                            <div 
+                              className={`px-5 py-3 rounded-2xl shadow-md relative text-sm leading-relaxed ${
+                                isOutgoing 
+                                  ? msg.fromType === 'nina'
+                                    ? 'bg-gradient-to-br from-violet-500 to-violet-600 text-white rounded-tr-sm shadow-violet-500/20'
+                                    : 'bg-gradient-to-br from-primary to-accent text-white rounded-tr-sm shadow-primary/20'
+                                  : 'bg-muted text-foreground rounded-tl-sm border border-border'
+                              }`}
+                            >
+                              {renderMessageContent(msg)}
+                            </div>
+                            <button
+                              onClick={() => setDeleteMessageId(msg.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive flex-shrink-0"
+                              title="Apagar mensagem"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           </div>
                           
                           <div className="flex items-center mt-1.5 gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity px-1">
