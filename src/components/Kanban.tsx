@@ -357,7 +357,7 @@ const Kanban: React.FC = () => {
             return (
               <div 
                 key={column.id}
-                className={`w-72 flex flex-col h-full rounded-xl border backdrop-blur-sm ${
+                className={`w-64 md:w-72 flex-shrink-0 flex flex-col h-full rounded-xl border backdrop-blur-sm ${
                   isWonColumn 
                     ? 'bg-emerald-50 border-emerald-200' 
                     : isLostColumn 
