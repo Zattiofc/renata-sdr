@@ -44,7 +44,7 @@ const Settings: React.FC = () => {
   const showSaveButton = activeTab !== 'audit';
   
   return (
-    <div className="p-6 max-w-5xl mx-auto h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
+    <div className="p-4 md:p-6 max-w-5xl mx-auto h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-foreground">Configurações</h2>

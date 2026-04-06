@@ -280,7 +280,7 @@ const Team: React.FC = () => {
   };
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-background text-foreground relative custom-scrollbar">
+    <div className="p-4 md:p-8 h-full overflow-y-auto bg-background text-foreground relative custom-scrollbar">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
         <div>

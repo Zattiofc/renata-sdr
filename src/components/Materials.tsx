@@ -243,7 +243,7 @@ const Materials: React.FC = () => {
   }, [materials.length]);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
