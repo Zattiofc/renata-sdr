@@ -990,19 +990,39 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "messages array required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Get configured model
-    const { data: settings } = await supabase.from("nina_settings").select("ai_provider, ai_model_name").limit(1).single();
-    let model = "google/gemini-3-flash-preview";
-    if (settings?.ai_model_name) {
-      const m = settings.ai_model_name;
-      if (m.includes("/")) model = m;
-      else if (settings.ai_provider === "openai") model = `openai/${m}`;
-      else model = `google/${m}`;
+    // Get configured model and API key
+    const { data: settings } = await supabase.from("nina_settings").select("ai_provider, ai_model_name, ai_api_key").limit(1).single();
+    
+    const userApiKey = settings?.ai_api_key;
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    // Determine if we use direct Google API or Lovable Gateway
+    const useDirectGoogle = !!userApiKey && settings?.ai_provider === 'google';
+    
+    let model: string;
+    let apiUrl: string;
+    let apiKey: string;
+    
+    if (useDirectGoogle) {
+      // Use Google Gemini API directly via OpenAI-compatible endpoint
+      model = settings.ai_model_name || "gemini-2.5-flash";
+      apiUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+      apiKey = userApiKey;
+      console.log(`[AI Assistant] Using direct Google API with model: ${model}`);
+    } else {
+      if (!LOVABLE_API_KEY) throw new Error("No API key configured");
+      model = "google/gemini-3-flash-preview";
+      if (settings?.ai_model_name) {
+        const m = settings.ai_model_name;
+        if (m.includes("/")) model = m;
+        else if (settings.ai_provider === "openai") model = `openai/${m}`;
+        else model = `google/${m}`;
+      }
+      apiUrl = LOVABLE_GATEWAY;
+      apiKey = LOVABLE_API_KEY;
+      console.log(`[AI Assistant] Using Lovable Gateway with model: ${model}`);
     }
 
     let conversationMessages: any[] = [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
@@ -1010,22 +1030,24 @@ serve(async (req) => {
     let finalContent = "";
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await fetch(LOVABLE_GATEWAY, {
+      const response = await fetch(apiUrl, {
         method: "POST",
-        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model, messages: conversationMessages, tools, tool_choice: "auto" }),
       });
 
       if (!response.ok) {
         const s = response.status;
+        const body = await response.text();
+        console.error(`[AI Assistant] API error ${s}:`, body.substring(0, 500));
         if (s === 429) return new Response(JSON.stringify({ error: "Rate limit. Tente em alguns segundos." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         if (s === 402) return new Response(JSON.stringify({ error: "Créditos insuficientes." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        throw new Error(`AI error: ${s}`);
+        throw new Error(`AI error: ${s} - ${body.substring(0, 200)}`);
       }
 
       const data = await response.json();
       const choice = data.choices?.[0];
-      if (!choice) throw new Error("No response");
+      if (!choice) throw new Error("No response from AI");
 
       const msg = choice.message;
       conversationMessages.push(msg);
