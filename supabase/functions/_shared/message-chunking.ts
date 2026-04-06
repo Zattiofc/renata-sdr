@@ -143,6 +143,49 @@ function splitPixSensitiveChunk(chunk: string): string[] {
   return segments.length > 0 ? segments : [trimmed];
 }
 
+/**
+ * Merges chunks that belong to the same product/catalog listing block.
+ * E.g. "Nesta safra temos:" + bullet list + "Tudo produção limitada 🔥"
+ */
+function mergeProductListingChunks(chunks: string[]): string[] {
+  if (chunks.length <= 1) return chunks;
+
+  const merged: string[] = [];
+  let buffer: string[] = [];
+  let inListing = false;
+
+  const isListingHeader = (c: string) => /^(nesta safra|temos|produtos|cardápio|catálogo)/i.test(c.trim());
+  const isBulletBlock = (c: string) => /^[-•●]\s/.test(c.trim());
+  const isListingFooter = (c: string) => /^tudo\s+(produção|lote)/i.test(c.trim());
+
+  const flushBuffer = () => {
+    if (buffer.length > 0) {
+      merged.push(buffer.join('\n\n'));
+      buffer = [];
+    }
+    inListing = false;
+  };
+
+  for (const chunk of chunks) {
+    if (isListingHeader(chunk)) {
+      flushBuffer();
+      buffer.push(chunk);
+      inListing = true;
+    } else if (inListing && (isBulletBlock(chunk) || isListingFooter(chunk))) {
+      buffer.push(chunk);
+      if (isListingFooter(chunk)) {
+        flushBuffer();
+      }
+    } else {
+      if (inListing) flushBuffer();
+      merged.push(chunk);
+    }
+  }
+
+  flushBuffer();
+  return merged;
+}
+
 export function splitMessageIntoChunks(
   content: string,
   options: MessageChunkingOptions = {},
@@ -152,8 +195,10 @@ export function splitMessageIntoChunks(
     ? [normalized]
     : normalized.split(/\n\n+/);
 
-  return baseChunks
+  const pixProcessed = baseChunks
     .flatMap(splitPixSensitiveChunk)
     .map((chunk) => chunk.trim())
     .filter(Boolean);
+
+  return mergeProductListingChunks(pixProcessed);
 }
