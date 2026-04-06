@@ -24,8 +24,12 @@ async function getStaleSendReason(supabase: any, queueItem: any): Promise<string
   }
 
   const queueAgeMs = getQueueItemAgeMs(queueItem.created_at);
+  const isRetry = (queueItem.retry_count || 0) > 0;
+  
+  // Use longer stale window for retried messages (instance was down)
+  const maxAge = isRetry ? MAX_SEND_QUEUE_AGE_RETRY_MS : MAX_SEND_QUEUE_AGE_MS;
 
-  if (queueAgeMs > MAX_SEND_QUEUE_AGE_MS) {
+  if (queueAgeMs > maxAge) {
     return `Skipped stale send queue item after ${Math.max(1, Math.round(queueAgeMs / 1000))}s`;
   }
 
