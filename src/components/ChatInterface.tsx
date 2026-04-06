@@ -211,6 +211,27 @@ const ChatInterface: React.FC = () => {
     await sendMessage(activeChat.id, content);
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await api.deleteMessage(messageId);
+      toast.success('Mensagem apagada');
+      setDeleteMessageId(null);
+    } catch {
+      toast.error('Erro ao apagar mensagem');
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!activeChat) return;
+    try {
+      await api.clearChat(activeChat.id);
+      toast.success('Chat limpo com sucesso');
+      setClearChatConfirm(false);
+    } catch {
+      toast.error('Erro ao limpar chat');
+    }
+  };
+
   const handleStatusChange = async (status: ConversationStatus) => {
     if (!activeChat) return;
     await updateStatus(activeChat.id, status);
