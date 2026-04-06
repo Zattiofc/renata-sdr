@@ -762,7 +762,6 @@ const ChatInterface: React.FC = () => {
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          </div>
                           
                           <div className="flex items-center mt-1.5 gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity px-1">
                             {isOutgoing && msg.fromType === 'nina' && (
