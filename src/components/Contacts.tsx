@@ -107,11 +107,11 @@ const Contacts: React.FC = () => {
   };
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-background text-foreground">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+    <div className="p-4 md:p-8 h-full overflow-y-auto bg-background text-foreground">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 md:mb-8 gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">Contatos</h2>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie sua base de leads e clientes com inteligência.</p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Contatos</h2>
+          <p className="text-sm text-muted-foreground mt-1">Gerencie sua base de leads e clientes.</p>
         </div>
       </div>
 

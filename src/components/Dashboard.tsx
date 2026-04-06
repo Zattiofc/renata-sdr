@@ -126,12 +126,12 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-8 overflow-y-auto h-full bg-background text-foreground custom-scrollbar">
+    <div className="p-4 md:p-6 space-y-6 md:space-y-8 overflow-y-auto h-full bg-background text-foreground custom-scrollbar">
       <OnboardingWizard isOpen={wizardOpen} onClose={() => setWizardOpen(false)} />
       
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Dashboard</h2>
           <p className="text-muted-foreground mt-1">
             Visão geral da performance da sua IA {period === 'today' ? 'hoje' : `nos últimos ${periodLabels[period].toLowerCase()}`}.
           </p>
@@ -181,9 +181,9 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-7">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-7">
         {/* Main Chart */}
-        <div className="col-span-4 rounded-2xl border border-border bg-card backdrop-blur-sm p-6 shadow-md">
+        <div className="col-span-1 md:col-span-4 rounded-2xl border border-border bg-card backdrop-blur-sm p-4 md:p-6 shadow-md">
           <div className="mb-6 flex items-center justify-between">
             <div>
                 <h3 className="text-lg font-semibold text-foreground">Volume de Atendimentos</h3>
@@ -238,7 +238,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Secondary Chart */}
-        <div className="col-span-3 rounded-2xl border border-border bg-card backdrop-blur-sm p-6 shadow-md flex flex-col">
+        <div className="col-span-1 md:col-span-3 rounded-2xl border border-border bg-card backdrop-blur-sm p-4 md:p-6 shadow-md flex flex-col">
            <div className="mb-6">
             <h3 className="text-lg font-semibold text-foreground">Conversões</h3>
             <p className="text-sm text-muted-foreground">Reuniões, vendas e ações concluídas</p>

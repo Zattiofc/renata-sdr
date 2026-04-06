@@ -35,14 +35,14 @@ const queryClient = new QueryClient({
 // Componente de Layout que envolve a aplicação principal
 const AppLayout: React.FC = () => {
   return (
-    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-background text-foreground overflow-hidden">
       {/* Background Ambient Glows */}
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[128px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
       <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[128px] pointer-events-none translate-x-1/2 translate-y-1/2 z-0"></div>
       
       <Sidebar />
       
-      <main className="flex-1 h-full overflow-hidden relative z-10 flex flex-col">
+      <main className="flex-1 min-h-0 overflow-hidden relative z-10 flex flex-col">
         {/* Top Border Gradient */}
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent opacity-50 z-20"></div>
         

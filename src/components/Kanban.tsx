@@ -312,12 +312,12 @@ const Kanban: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background text-foreground p-6 overflow-hidden relative">
+    <div className="h-full flex flex-col bg-background text-foreground p-4 md:p-6 overflow-hidden relative">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-8 gap-4 flex-shrink-0">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">Pipeline de Vendas</h2>
-          <p className="text-sm text-muted-foreground mt-1">Gerencie oportunidades e acompanhe o fluxo de receita.</p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">Pipeline de Vendas</h2>
+          <p className="text-sm text-muted-foreground mt-1">Gerencie oportunidades e acompanhe o fluxo.</p>
         </div>
         <div className="flex gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
@@ -357,7 +357,7 @@ const Kanban: React.FC = () => {
             return (
               <div 
                 key={column.id}
-                className={`w-72 flex flex-col h-full rounded-xl border backdrop-blur-sm ${
+                className={`w-64 md:w-72 flex-shrink-0 flex flex-col h-full rounded-xl border backdrop-blur-sm ${
                   isWonColumn 
                     ? 'bg-emerald-50 border-emerald-200' 
                     : isLostColumn 

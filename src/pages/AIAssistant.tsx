@@ -62,7 +62,7 @@ const AIAssistant: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
+      <div className="flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
           <Bot className="w-5 h-5 text-primary" />
         </div>

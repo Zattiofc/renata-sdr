@@ -487,7 +487,7 @@ const Scheduling: React.FC = () => {
   };
 
   return (
-    <div className="p-6 h-full flex flex-col bg-background text-foreground">
+    <div className="p-4 md:p-6 h-full flex flex-col bg-background text-foreground">
       {/* Header */}
       <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between mb-6 gap-4">
         <div>
