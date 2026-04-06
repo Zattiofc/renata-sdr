@@ -81,9 +81,10 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
       }
 
       const responseText: string = data?.response || '';
-      const parts = responseText.split('\n\n').filter((p: string) => p.trim());
+      const parts = Array.isArray(data?.chunks) && data.chunks.length > 0
+        ? data.chunks.filter((p: string) => p.trim())
+        : responseText.split('\n\n').filter((p: string) => p.trim());
 
-      // Add each part as a separate message with delay
       for (let i = 0; i < parts.length; i++) {
         if (i > 0) {
           await new Promise(resolve => setTimeout(resolve, 300));

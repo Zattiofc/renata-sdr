@@ -2796,12 +2796,7 @@ ${contact.resumo_vivo}
 }
 
 function breakMessageIntoChunks(content: string): string[] {
-  const chunks = content
-    .split(/\n\n+/)
-    .map(chunk => chunk.trim())
-    .filter(chunk => chunk.length > 0);
-  
-  return chunks.length > 0 ? chunks : [content];
+  return chunkOutboundMessage(content);
 }
 
 function getModelSettings(
