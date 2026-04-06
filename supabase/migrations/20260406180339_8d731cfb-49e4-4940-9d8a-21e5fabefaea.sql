@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS public.idx_send_queue_dedup;
