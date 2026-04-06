@@ -1599,4 +1599,57 @@ export const api = {
 
     return (data || []).reverse(); // Reverter para ordem cronológica
   },
+
+  /**
+   * Delete a single message
+   */
+  deleteMessage: async (messageId: string): Promise<void> => {
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId);
+
+    if (error) {
+      console.error('[API] Error deleting message:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Clear all messages from a conversation
+   */
+  clearChat: async (conversationId: string): Promise<void> => {
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', conversationId);
+
+    if (error) {
+      console.error('[API] Error clearing chat:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Add a new contact manually
+   */
+  addContact: async (contact: { name?: string; phone: string; email?: string }): Promise<any> => {
+    const userId = await getCurrentUserId();
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({
+        name: contact.name?.trim() || null,
+        phone_number: contact.phone.trim(),
+        email: contact.email?.trim() || null,
+        user_id: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[API] Error adding contact:', error);
+      throw error;
+    }
+    return data;
+  },
 };
