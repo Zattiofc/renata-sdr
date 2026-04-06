@@ -2841,7 +2841,7 @@ function getAdaptiveSettings(
   clientMemory: any
 ): { model: string; temperature: number } {
   const defaultSettings = {
-    model: 'google/gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     temperature: 0.7
   };
 
@@ -2862,38 +2862,23 @@ function getAdaptiveSettings(
   const qualificationScore = clientMemory?.lead_profile?.qualification_score || 0;
 
   if (isComplaint || isUrgent) {
-    return {
-      model: 'google/gemini-2.5-pro',
-      temperature: 0.3
-    };
+    return { model: 'gemini-2.5-pro', temperature: 0.3 };
   }
 
   if (isSales && qualificationScore > 50) {
-    return {
-      model: 'google/gemini-3-flash-preview',
-      temperature: 0.5
-    };
+    return { model: 'gemini-2.5-flash', temperature: 0.5 };
   }
 
   if (isTechnical) {
-    return {
-      model: 'google/gemini-2.5-pro',
-      temperature: 0.4
-    };
+    return { model: 'gemini-2.5-pro', temperature: 0.4 };
   }
 
   if (messageCount < 5) {
-    return {
-      model: 'google/gemini-3-flash-preview',
-      temperature: 0.8
-    };
+    return { model: 'gemini-2.5-flash', temperature: 0.8 };
   }
 
   if (messageCount > 15) {
-    return {
-      model: 'google/gemini-3-flash-preview',
-      temperature: 0.5
-    };
+    return { model: 'gemini-2.5-flash', temperature: 0.5 };
   }
 
   return defaultSettings;
