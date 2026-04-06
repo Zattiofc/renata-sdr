@@ -1604,6 +1604,12 @@ export const api = {
    * Delete a single message
    */
   deleteMessage: async (messageId: string): Promise<void> => {
+    // First remove references in message_grouping_queue
+    await supabase
+      .from('message_grouping_queue')
+      .delete()
+      .eq('message_id', messageId);
+
     const { error } = await supabase
       .from('messages')
       .delete()
