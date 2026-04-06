@@ -1,0 +1,1 @@
+UPDATE public.nina_settings SET is_active = true, auto_response_enabled = true, updated_at = now() WHERE id = (SELECT id FROM public.nina_settings LIMIT 1);
