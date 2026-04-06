@@ -1625,6 +1625,21 @@ export const api = {
    * Clear all messages from a conversation
    */
   clearChat: async (conversationId: string): Promise<void> => {
+    // First get all message IDs for this conversation
+    const { data: messages } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('conversation_id', conversationId);
+
+    if (messages && messages.length > 0) {
+      const messageIds = messages.map(m => m.id);
+      // Remove references in message_grouping_queue
+      await supabase
+        .from('message_grouping_queue')
+        .delete()
+        .in('message_id', messageIds);
+    }
+
     const { error } = await supabase
       .from('messages')
       .delete()
