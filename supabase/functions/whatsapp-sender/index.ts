@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const WHATSAPP_API_URL = "https://graph.facebook.com/v18.0";
 const MAX_SEND_QUEUE_AGE_MS = 5 * 60 * 1000;
+const MAX_SEND_QUEUE_AGE_RETRY_MS = 30 * 60 * 1000; // 30 min for retried messages
 
 function getQueueItemAgeMs(createdAt?: string | null) {
   if (!createdAt) return 0;
@@ -23,8 +24,12 @@ async function getStaleSendReason(supabase: any, queueItem: any): Promise<string
   }
 
   const queueAgeMs = getQueueItemAgeMs(queueItem.created_at);
+  const isRetry = (queueItem.retry_count || 0) > 0;
+  
+  // Use longer stale window for retried messages (instance was down)
+  const maxAge = isRetry ? MAX_SEND_QUEUE_AGE_RETRY_MS : MAX_SEND_QUEUE_AGE_MS;
 
-  if (queueAgeMs > MAX_SEND_QUEUE_AGE_MS) {
+  if (queueAgeMs > maxAge) {
     return `Skipped stale send queue item after ${Math.max(1, Math.round(queueAgeMs / 1000))}s`;
   }
 
@@ -188,9 +193,16 @@ serve(async (req) => {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`[Sender] Error sending item ${item.id}:`, error);
           
-          // Mark as failed with retry
+          // Mark as failed with retry - more retries for connection issues
           const newRetryCount = (item.retry_count || 0) + 1;
-          const shouldRetry = newRetryCount < 3;
+          const isConnectionError = errorMessage.includes('not connected') || errorMessage.includes('connecting');
+          const maxRetries = isConnectionError ? 10 : 3;
+          const shouldRetry = newRetryCount < maxRetries;
+          
+          // Shorter retry delay for connection issues (30s), normal for others
+          const retryDelay = isConnectionError 
+            ? Math.min(newRetryCount * 30000, 120000) // 30s, 60s, 90s, max 120s
+            : newRetryCount * 60000; // 1min, 2min, 3min
           
           await supabase
             .from('send_queue')
@@ -199,7 +211,7 @@ serve(async (req) => {
               retry_count: newRetryCount,
               error_message: errorMessage,
               scheduled_at: shouldRetry 
-                ? new Date(Date.now() + newRetryCount * 60000).toISOString() 
+                ? new Date(Date.now() + retryDelay).toISOString() 
                 : null
             })
             .eq('id', item.id);
