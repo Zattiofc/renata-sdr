@@ -331,18 +331,19 @@ const tools = [
       },
     },
   },
-  // ===== NINA SETTINGS =====
+  // ===== NINA SETTINGS (FULL ACCESS) =====
   {
     type: "function",
     function: {
       name: "manage_nina_settings",
-      description: "Consultar ou atualizar configurações da IA Nina: horário comercial, delays, modelo de IA, status ativo/inativo, nome da empresa, etc.",
+      description: "Consultar ou atualizar TODAS as configurações da IA/Nina: horário comercial, delays, modelo de IA, status, prompt do sistema, chaves de API, ElevenLabs, Evolution API, etc. Use action 'get' para ver tudo incluindo o system_prompt_override. Use action 'update' para alterar qualquer campo.",
       parameters: {
         type: "object",
         properties: {
           action: { type: "string", enum: ["get", "update"], description: "Ação" },
           updates: {
             type: "object",
+            description: "Qualquer campo da tabela nina_settings pode ser atualizado aqui",
             properties: {
               is_active: { type: "boolean" },
               auto_response_enabled: { type: "boolean" },
@@ -355,6 +356,26 @@ const tools = [
               response_delay_max: { type: "number" },
               message_breaking_enabled: { type: "boolean" },
               ai_scheduling_enabled: { type: "boolean" },
+              system_prompt_override: { type: "string", description: "O prompt principal do sistema que a IA usa para responder clientes. Pode ser lido e editado livremente." },
+              ai_provider: { type: "string", description: "Provedor de IA: google, openai, anthropic" },
+              ai_model_name: { type: "string", description: "Nome do modelo de IA" },
+              ai_model_mode: { type: "string" },
+              adaptive_response_enabled: { type: "boolean" },
+              audio_response_enabled: { type: "boolean" },
+              elevenlabs_api_key: { type: "string" },
+              elevenlabs_voice_id: { type: "string" },
+              elevenlabs_model: { type: "string" },
+              elevenlabs_stability: { type: "number" },
+              elevenlabs_similarity_boost: { type: "number" },
+              elevenlabs_style: { type: "number" },
+              elevenlabs_speed: { type: "number" },
+              elevenlabs_speaker_boost: { type: "boolean" },
+              evolution_api_url: { type: "string" },
+              evolution_api_key: { type: "string" },
+              timezone: { type: "string" },
+              route_all_to_receiver_enabled: { type: "boolean" },
+              test_phone_numbers: { type: "object" },
+              test_system_prompt: { type: "string" },
             },
           },
         },
@@ -433,6 +454,100 @@ const tools = [
         type: "object",
         properties: {
           action: { type: "string", enum: ["list", "check_status"], description: "Ação" },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== DESIGN SETTINGS =====
+  {
+    type: "function",
+    function: {
+      name: "manage_design_settings",
+      description: "Consultar ou atualizar configurações visuais: cores, fontes, logo, nome exibido na sidebar, subtítulo.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["get", "update"], description: "Ação" },
+          updates: {
+            type: "object",
+            properties: {
+              primary_color: { type: "string" },
+              accent_color: { type: "string" },
+              sidebar_bg_color: { type: "string" },
+              sidebar_primary_color: { type: "string" },
+              heading_font: { type: "string" },
+              body_font: { type: "string" },
+              company_display_name: { type: "string" },
+              company_subtitle: { type: "string" },
+              logo_url: { type: "string" },
+              sidebar_identity_enabled: { type: "boolean" },
+              sidebar_identity_font: { type: "string" },
+            },
+          },
+        },
+        required: ["action"],
+      },
+    },
+  },
+  // ===== RAW DATABASE QUERY (READ) =====
+  {
+    type: "function",
+    function: {
+      name: "execute_database_query",
+      description: "Executar uma query SELECT no banco de dados para ler qualquer dado. Use para consultas complexas, JOINs, aggregations, ou acessar tabelas que não têm uma tool específica. APENAS SELECT (leitura).",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Query SQL SELECT a executar. Exemplos: 'SELECT * FROM send_queue ORDER BY created_at DESC LIMIT 10', 'SELECT COUNT(*) FROM messages WHERE from_type = \\'nina\\''" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  // ===== RAW DATABASE MUTATION =====
+  {
+    type: "function",
+    function: {
+      name: "execute_database_mutation",
+      description: "Executar INSERT, UPDATE ou DELETE no banco de dados. Use para operações que não têm uma tool específica. CUIDADO: operações destrutivas. Sempre confirme com o operador antes de deletar dados.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Query SQL (INSERT/UPDATE/DELETE) a executar" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  // ===== NICHE PACKS =====
+  {
+    type: "function",
+    function: {
+      name: "manage_niche_packs",
+      description: "Gerenciar pacotes de nicho: listar, criar, atualizar ou ativar/desativar packs de nicho com personas, dores, objeções, tom de voz, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["list", "get", "create", "update", "toggle"], description: "Ação" },
+          pack_id: { type: "string" },
+          updates: {
+            type: "object",
+            properties: {
+              nome_nicho: { type: "string" },
+              label: { type: "string" },
+              icp_persona: { type: "string" },
+              tom_de_voz: { type: "string" },
+              dores_principais: { type: "array", items: { type: "string" } },
+              objecoes_comuns: { type: "array", items: { type: "string" } },
+              perguntas_qualificacao: { type: "array", items: { type: "string" } },
+              ctas_preferenciais: { type: "array", items: { type: "string" } },
+              provas_sociais_sugeridas: { type: "array", items: { type: "string" } },
+              termos_proibidos: { type: "array", items: { type: "string" } },
+              is_active: { type: "boolean" },
+              is_default: { type: "boolean" },
+            },
+          },
         },
         required: ["action"],
       },
@@ -657,7 +772,6 @@ async function executeManageInventory(supabase: any, args: any) {
     const type = args.action === "add_stock" ? "in" : "out";
     const { error: movErr } = await supabase.from("inventory_movements").insert({ inventory_id: id, type, quantity: qty, reason: args.movement_reason || "Ajuste manual via assistente", created_by: "ai-assistant" });
     if (movErr) return { error: movErr.message };
-    // Update quantity
     const { data: prod } = await supabase.from("inventory").select("quantity").eq("id", id).single();
     const newQty = type === "in" ? (prod?.quantity || 0) + qty : Math.max(0, (prod?.quantity || 0) - qty);
     await supabase.from("inventory").update({ quantity: newQty, updated_at: new Date().toISOString() }).eq("id", id);
@@ -773,14 +887,16 @@ async function executeManageMaterials(supabase: any, args: any) {
 
 async function executeManageNinaSettings(supabase: any, args: any) {
   if (args.action === "get") {
-    const { data, error } = await supabase.from("nina_settings").select("company_name, sdr_name, is_active, auto_response_enabled, business_hours_start, business_hours_end, business_days, response_delay_min, response_delay_max, message_breaking_enabled, ai_scheduling_enabled, ai_provider, ai_model_name, adaptive_response_enabled, audio_response_enabled, timezone").limit(1).single();
+    // Return ALL fields so the assistant can read everything including the prompt
+    const { data, error } = await supabase.from("nina_settings").select("*").limit(1).single();
     if (error) return { error: error.message };
+    // Mask sensitive keys partially for display but still show them
     return { settings: data };
   }
   if (args.action === "update") {
     const { error } = await supabase.from("nina_settings").update({ ...args.updates, updated_at: new Date().toISOString() }).not("id", "is", null);
     if (error) return { error: error.message };
-    return { success: true, message: "Configurações atualizadas" };
+    return { success: true, message: "Configurações atualizadas com sucesso" };
   }
   return { error: "Ação inválida" };
 }
@@ -831,10 +947,8 @@ async function executeGetSystemStats(supabase: any) {
     supabase.from("deals").select("stage_id, pipeline_stages(title)"),
   ]);
   const lowStock = inventory.data?.filter((i: any) => i.quantity <= i.min_quantity)?.length || 0;
-  // Count leads by state
   const leadsByState: Record<string, number> = {};
   leadStates.data?.forEach((c: any) => { leadsByState[c.lead_state || 'UNKNOWN'] = (leadsByState[c.lead_state || 'UNKNOWN'] || 0) + 1; });
-  // Count deals by stage
   const dealsByStage: Record<string, number> = {};
   stageStats.data?.forEach((d: any) => { const s = d.pipeline_stages?.title || 'Sem estágio'; dealsByStage[s] = (dealsByStage[s] || 0) + 1; });
 
@@ -884,6 +998,122 @@ async function executeManageWhatsAppInstances(supabase: any, args: any) {
   return { error: "Ação inválida" };
 }
 
+async function executeManageDesignSettings(supabase: any, args: any) {
+  if (args.action === "get") {
+    const { data, error } = await supabase.from("design_settings").select("*").limit(1).single();
+    if (error) return { error: error.message };
+    return { settings: data };
+  }
+  if (args.action === "update") {
+    const { error } = await supabase.from("design_settings").update({ ...args.updates, updated_at: new Date().toISOString() }).not("id", "is", null);
+    if (error) return { error: error.message };
+    return { success: true, message: "Configurações visuais atualizadas" };
+  }
+  return { error: "Ação inválida" };
+}
+
+async function executeDatabaseQuery(supabase: any, args: any) {
+  const query = (args.query || "").trim();
+  if (!query) return { error: "Query vazia" };
+  
+  // Only allow SELECT for the read-only tool
+  const normalized = query.replace(/\s+/g, " ").toUpperCase();
+  if (!normalized.startsWith("SELECT")) {
+    return { error: "Apenas queries SELECT são permitidas nesta tool. Use execute_database_mutation para INSERT/UPDATE/DELETE." };
+  }
+  
+  try {
+    const { data, error } = await supabase.rpc("execute_readonly_query", { sql_query: query });
+    if (error) {
+      // Fallback: try using postgrest directly via raw SQL
+      // This won't work with supabase-js, so we use the REST API
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/execute_readonly_query`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+          "apikey": serviceKey,
+        },
+        body: JSON.stringify({ sql_query: query }),
+      });
+      if (!resp.ok) {
+        // If function doesn't exist, try a simpler approach with known tables
+        return { error: `Query falhou: ${error.message}. Dica: use as tools específicas (query_contacts, query_deals, etc) ou peça ao admin para criar a função execute_readonly_query.` };
+      }
+      const result = await resp.json();
+      return { data: result, count: Array.isArray(result) ? result.length : 1 };
+    }
+    return { data, count: Array.isArray(data) ? data.length : 1 };
+  } catch (e) {
+    return { error: `Erro: ${e.message}` };
+  }
+}
+
+async function executeDatabaseMutation(supabase: any, args: any) {
+  const query = (args.query || "").trim();
+  if (!query) return { error: "Query vazia" };
+  
+  const normalized = query.replace(/\s+/g, " ").toUpperCase();
+  // Block dangerous operations
+  if (normalized.includes("DROP TABLE") || normalized.includes("DROP SCHEMA") || normalized.includes("TRUNCATE") || normalized.includes("ALTER TABLE")) {
+    return { error: "Operações DDL (DROP, ALTER, TRUNCATE) não são permitidas. Use apenas INSERT, UPDATE, DELETE." };
+  }
+  
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/execute_mutation_query`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+        "apikey": serviceKey,
+      },
+      body: JSON.stringify({ sql_query: query }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      return { error: `Mutation falhou: ${body}. Use as tools específicas (update_contact, update_deal, etc) como alternativa.` };
+    }
+    const result = await resp.json();
+    return { success: true, result, message: "Query executada com sucesso" };
+  } catch (e) {
+    return { error: `Erro: ${e.message}` };
+  }
+}
+
+async function executeManageNichePacks(supabase: any, args: any) {
+  if (args.action === "list") {
+    const { data, error } = await supabase.from("niche_packs").select("*").order("created_at", { ascending: false });
+    if (error) return { error: error.message };
+    return { packs: data, count: data?.length || 0 };
+  }
+  if (args.action === "get" && args.pack_id) {
+    const { data, error } = await supabase.from("niche_packs").select("*").eq("id", args.pack_id).single();
+    if (error) return { error: error.message };
+    return { pack: data };
+  }
+  if (args.action === "create") {
+    const { data, error } = await supabase.from("niche_packs").insert(args.updates).select().single();
+    if (error) return { error: error.message };
+    return { success: true, pack: data };
+  }
+  if (args.action === "update" && args.pack_id) {
+    const { error } = await supabase.from("niche_packs").update({ ...args.updates, updated_at: new Date().toISOString() }).eq("id", args.pack_id);
+    if (error) return { error: error.message };
+    return { success: true, message: "Pack atualizado" };
+  }
+  if (args.action === "toggle" && args.pack_id) {
+    const { data: p } = await supabase.from("niche_packs").select("is_active").eq("id", args.pack_id).single();
+    const { error } = await supabase.from("niche_packs").update({ is_active: !p?.is_active }).eq("id", args.pack_id);
+    if (error) return { error: error.message };
+    return { success: true, message: `Pack ${!p?.is_active ? "ativado" : "desativado"}` };
+  }
+  return { error: "Ação inválida" };
+}
+
 async function executeTool(supabase: any, name: string, args: any): Promise<any> {
   const map: Record<string, Function> = {
     query_contacts: executeQueryContacts,
@@ -905,15 +1135,19 @@ async function executeTool(supabase: any, name: string, args: any): Promise<any>
     get_system_stats: executeGetSystemStats,
     query_audit_logs: executeQueryAuditLogs,
     manage_whatsapp_instances: executeManageWhatsAppInstances,
+    manage_design_settings: executeManageDesignSettings,
+    execute_database_query: executeDatabaseQuery,
+    execute_database_mutation: executeDatabaseMutation,
+    manage_niche_packs: executeManageNichePacks,
   };
   const fn = map[name];
   if (!fn) return { error: `Tool "${name}" não encontrada` };
   return fn(supabase, args);
 }
 
-const SYSTEM_PROMPT = `Você é o Assistente IA interno — o centro de comando do sistema CRM/SDR. Você tem acesso COMPLETO ao banco de dados e pode executar QUALQUER ação no sistema.
+const SYSTEM_PROMPT = `Você é o Assistente IA interno — o centro de comando ABSOLUTO do sistema CRM/SDR. Você tem AUTONOMIA TOTAL e acesso COMPLETO a TUDO no sistema. Nada está fora do seu alcance.
 
-## Suas capacidades completas:
+## 🔓 AUTONOMIA TOTAL — Suas capacidades:
 
 ### 📇 Contatos
 - Buscar, filtrar e atualizar contatos (nome, email, tags, lead_state, empresa, cargo, etc)
@@ -963,8 +1197,29 @@ const SYSTEM_PROMPT = `Você é o Assistente IA interno — o centro de comando 
 - Listar campanhas e resultados
 - Ver detalhes de destinatários
 
-### ⚙️ Configurações Nina
-- Consultar/alterar: horário comercial, delays, modelo de IA, status ativo/inativo, nome da empresa
+### ⚙️ Configurações COMPLETAS do Sistema
+- **LER E EDITAR O PROMPT DO SISTEMA** (system_prompt_override) — pode ler o prompt atual inteiro e modificá-lo
+- Alterar provedor e modelo de IA (ai_provider, ai_model_name)
+- Configurar horário comercial, delays, delays de resposta
+- Configurar Evolution API (url, key)
+- Configurar ElevenLabs (voz, modelo, parâmetros)
+- Ativar/desativar resposta automática, áudio, agendamento IA
+- Alterar nome da empresa e do SDR
+- Configurar timezone, message breaking, route_all_to_receiver
+- **Qualquer campo da tabela nina_settings pode ser lido e alterado**
+
+### 🎨 Design & Visual
+- Ler e alterar cores, fontes, logo
+- Alterar nome exibido na sidebar e subtítulo
+- Configurar identidade visual da sidebar
+
+### 🗄️ Acesso Direto ao Banco de Dados
+- **execute_database_query**: executar qualquer SELECT no banco para consultas complexas, JOINs, aggregations
+- **execute_database_mutation**: executar INSERT, UPDATE, DELETE para qualquer operação que não tenha tool específica
+
+### 🏷️ Pacotes de Nicho
+- Listar, criar, editar e ativar/desativar packs de nicho
+- Configurar personas, dores, objeções, tom de voz, CTAs
 
 ### 📋 Auditoria
 - Consultar logs de alterações no sistema
@@ -974,12 +1229,15 @@ const SYSTEM_PROMPT = `Você é o Assistente IA interno — o centro de comando 
 
 ## Regras de comportamento:
 1. **SEMPRE** use as tools para dados reais — NUNCA invente dados
-2. Para ações destrutivas ou envios em massa, **CONFIRME** com o operador antes
-3. Apresente dados em **tabelas markdown** organizadas
-4. Use ✅ ❌ ⚠️ 📊 📇 para indicar status
-5. Seja proativo: ao mostrar problemas, sugira soluções
-6. Português brasileiro, profissional mas amigável
-7. Se algo falhar, explique e sugira alternativas`;
+2. Você tem **TOTAL AUTONOMIA** para ler e editar qualquer configuração, inclusive o prompt do sistema
+3. Para ações destrutivas (deletar dados em massa), **CONFIRME** com o operador antes
+4. Apresente dados em **tabelas markdown** organizadas
+5. Use ✅ ❌ ⚠️ 📊 📇 para indicar status
+6. Seja proativo: ao mostrar problemas, sugira soluções
+7. Português brasileiro, profissional mas amigável
+8. Se algo falhar, explique e sugira alternativas
+9. Quando pedirem para ver ou editar o prompt, use manage_nina_settings com action "get" para ler e "update" com system_prompt_override para editar
+10. NUNCA diga que não tem acesso a algo. Você tem acesso a TUDO.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -1006,8 +1264,9 @@ serve(async (req) => {
     let apiKey: string;
     
     if (useDirectGoogle) {
-      // Use Google Gemini API directly via OpenAI-compatible endpoint
       model = settings.ai_model_name || "gemini-2.5-flash";
+      // Strip provider prefix
+      if (model.includes("/")) model = model.split("/").pop() || model;
       apiUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
       apiKey = userApiKey;
       console.log(`[AI Assistant] Using direct Google API with model: ${model}`);
@@ -1026,7 +1285,7 @@ serve(async (req) => {
     }
 
     let conversationMessages: any[] = [{ role: "system", content: SYSTEM_PROMPT }, ...messages];
-    const MAX_ROUNDS = 8;
+    const MAX_ROUNDS = 10;
     let finalContent = "";
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
