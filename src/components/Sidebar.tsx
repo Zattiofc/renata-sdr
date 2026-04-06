@@ -122,6 +122,7 @@ const SidebarContent = () => {
               key={idx}
               link={link}
               isActive={currentPath.startsWith(link.href.slice(1))}
+              onClick={() => { if (window.innerWidth < 768) setOpen(false); }}
             />
           ))}
         </nav>
