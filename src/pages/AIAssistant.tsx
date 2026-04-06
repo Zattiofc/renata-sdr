@@ -83,7 +83,7 @@ const AIAssistant: React.FC = () => {
         </div>
         {messages.length > 0 && (
           <button
-            onClick={() => setMessages([])}
+            onClick={() => { setMessages([]); localStorage.removeItem(STORAGE_KEY); }}
             className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
             title="Limpar conversa"
           >
