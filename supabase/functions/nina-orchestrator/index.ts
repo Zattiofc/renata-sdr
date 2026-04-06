@@ -2137,8 +2137,9 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
     aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact);
   }
 
-  // ===== SANITIZE: Strip any internal tags that may have leaked =====
+  // ===== SANITIZE + BUSINESS GUARDRAILS =====
   aiContent = sanitizeResponseForClient(aiContent);
+  aiContent = enforcePixGuardrail(aiContent, finalPrompt);
 
   console.log('[Nina] Final response length:', aiContent.length);
 
@@ -2301,6 +2302,49 @@ function sanitizeResponseForClient(content: string): string {
   content = content.replace(/\n{3,}/g, '\n\n').trim();
   
   return content;
+}
+
+const DEFAULT_PIX_KEY = 'familianavares@gmail.com';
+const CANONICAL_PIX_LABEL = 'Nossa chave PIX:';
+
+function extractPixKeyFromPrompt(prompt: string | null | undefined): string | null {
+  if (!prompt) return null;
+
+  const normalized = prompt.replace(/\r\n?/g, '\n');
+  const pixSectionMatch = normalized.match(/(?:chave\s+pix|pix)[\s\S]{0,200}/i);
+  const emailMatch = (pixSectionMatch?.[0] || normalized).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+
+  return emailMatch?.[0] || null;
+}
+
+function enforcePixGuardrail(content: string, promptContext?: string): string {
+  if (!content) return content;
+
+  let normalized = content.trim();
+  if (!normalized) return normalized;
+
+  const hasOrderSummary = /\bpedido\b/i.test(normalized) && /\btotal\b/i.test(normalized);
+  const hasPixLabel = /(?:nossa\s+)?chave\s+pix/i.test(normalized);
+
+  if (!hasOrderSummary && !hasPixLabel) {
+    return normalized;
+  }
+
+  const pixKey = extractPixKeyFromPrompt(promptContext) || DEFAULT_PIX_KEY;
+  const hasRequiredPixKey = normalized.toLowerCase().includes(pixKey.toLowerCase());
+
+  if (hasPixLabel) {
+    normalized = normalized.replace(/(?:nossa\s+)?chave\s+pix\s*:?/gi, CANONICAL_PIX_LABEL);
+  } else {
+    normalized = `${normalized}\n\n${CANONICAL_PIX_LABEL}`;
+  }
+
+  if (!hasRequiredPixKey) {
+    normalized = `${normalized}\n\n${pixKey}`;
+    console.log('[Nina] PIX guardrail appended missing PIX key');
+  }
+
+  return normalized.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function isGenericContextLossResponse(content: string | null | undefined): boolean {
