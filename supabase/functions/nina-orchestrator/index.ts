@@ -274,6 +274,39 @@ const reserveInventoryTool = {
   }
 };
 
+// Tool definition for validating payment receipts
+const validatePaymentTool = {
+  type: "function",
+  function: {
+    name: "validate_payment",
+    description: "Validar comprovante de pagamento enviado pelo cliente. Use SEMPRE que o cliente enviar uma imagem que parece ser um comprovante de pagamento/PIX/transferência. A ferramenta irá comparar o valor do comprovante com o total do pedido. Informe o valor que você conseguiu ler na imagem e o endereço de entrega se mencionado.",
+    parameters: {
+      type: "object",
+      properties: {
+        valor_extraido: {
+          type: "number",
+          description: "Valor em reais que você leu/extraiu do comprovante de pagamento (ex: 264.00)"
+        },
+        tipo_comprovante: {
+          type: "string",
+          enum: ["pix", "transferencia", "deposito", "outro", "nao_identificado"],
+          description: "Tipo de comprovante identificado na imagem"
+        },
+        endereco_entrega: {
+          type: "string",
+          description: "Endereço de entrega informado pelo cliente durante a conversa (se disponível)"
+        },
+        observacoes: {
+          type: "string",
+          description: "Observações adicionais sobre o comprovante (ex: 'valor parcial', 'imagem borrada')"
+        }
+      },
+      required: ["valor_extraido", "tipo_comprovante"],
+      additionalProperties: false
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1724,9 +1757,18 @@ REGRA: Avalie CADA resposta do cliente e mova automaticamente para o estágio co
 Se o cliente demonstrar interesse → "Em Qualificação"
 Se confirmar pedido → "Pedido Montado"  
 Se confirmar pagamento → "Aguardando Pagamento"
-Se enviar comprovante → "Pagamento Efetuado"
+Se enviar comprovante → USE validate_payment para validar e mover automaticamente para "Pagamento Efetuado"
 Se desistir/não querer → "Perdido"
 Estágio atual do lead: ${currentStageName}
+
+VALIDAÇÃO DE COMPROVANTE (OBRIGATÓRIO):
+Quando o cliente enviar uma IMAGEM que pareça ser um comprovante de pagamento (PIX, transferência, depósito):
+1. Analise visualmente o comprovante na imagem
+2. Extraia o VALOR do comprovante
+3. Chame a ferramenta validate_payment com o valor extraído
+4. Se o valor for menor que o esperado, informe ao cliente a diferença
+5. Se o valor estiver correto, confirme o pagamento
+6. NÃO confirme pagamento sem usar validate_payment
 </pipeline_context>`;
       
       console.log(`[Nina] Pipeline context injected: ${pipelineStages.length} stages, current: ${currentStageName}`);
@@ -1777,7 +1819,7 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
   console.log('[Nina] Using AI config:', { provider: aiConfig.provider, model: aiConfig.model });
 
   // Build tools array - only add appointment tools if enabled
-  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool, checkInventoryTool, reserveInventoryTool]; // Always available
+  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool, checkInventoryTool, reserveInventoryTool, validatePaymentTool]; // Always available
   if (settings?.ai_scheduling_enabled !== false) {
     tools.push(createAppointmentTool);
     tools.push(rescheduleAppointmentTool);
@@ -2213,6 +2255,187 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
         }
       } catch (parseError) {
         console.error('[Nina] Error processing reserve_inventory:', parseError);
+      }
+    }
+
+    // ===== VALIDATE PAYMENT TOOL =====
+    if (toolCall.function?.name === 'validate_payment') {
+      try {
+        const args = JSON.parse(toolCall.function.arguments);
+        console.log('[Nina] Processing validate_payment tool call:', args);
+
+        const valorExtraido = Number(args.valor_extraido) || 0;
+        const tipoComprovante = args.tipo_comprovante || 'nao_identificado';
+        const enderecoEntrega = args.endereco_entrega || '';
+        const observacoes = args.observacoes || '';
+
+        // Get deal value (expected total) for this contact
+        const { data: deal } = await supabase
+          .from('deals')
+          .select('id, value, stage_id, title')
+          .eq('contact_id', conversation.contact_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const expectedValue = Number(deal?.value) || 0;
+        const tolerance = 0.50; // R$ 0.50 tolerance for rounding
+
+        let paymentStatus: 'approved' | 'partial' | 'no_deal' | 'mismatch' = 'approved';
+        let resultMsg = '';
+
+        if (!deal || expectedValue <= 0) {
+          paymentStatus = 'no_deal';
+          resultMsg = `⚠️ Não há pedido ativo para este cliente. Valor do comprovante: R$ ${valorExtraido.toFixed(2)}. Confirme os itens do pedido antes de validar.`;
+        } else if (valorExtraido < expectedValue - tolerance) {
+          paymentStatus = 'partial';
+          const diff = expectedValue - valorExtraido;
+          resultMsg = `⚠️ Valor PARCIAL detectado. Comprovante: R$ ${valorExtraido.toFixed(2)} | Pedido total: R$ ${expectedValue.toFixed(2)} | Diferença: R$ ${diff.toFixed(2)}. Informe ao cliente que o valor está abaixo do total.`;
+        } else {
+          paymentStatus = 'approved';
+          resultMsg = `✅ Pagamento VALIDADO! Comprovante: R$ ${valorExtraido.toFixed(2)} | Pedido: R$ ${expectedValue.toFixed(2)}. Tipo: ${tipoComprovante}.`;
+        }
+
+        // Log payment validation event
+        await supabase.from('memory_events').insert({
+          contact_id: conversation.contact_id,
+          conversation_id: conversation.id,
+          tipo: 'payment_validation',
+          payload: {
+            valor_extraido: valorExtraido,
+            valor_esperado: expectedValue,
+            tipo_comprovante: tipoComprovante,
+            status: paymentStatus,
+            endereco_entrega: enderecoEntrega,
+            observacoes,
+            deal_id: deal?.id || null,
+          }
+        });
+
+        toolResultsForSecondPass.push({ name: 'validate_payment', result: resultMsg });
+        console.log(`[Nina] Payment validation: ${paymentStatus} (extracted: ${valorExtraido}, expected: ${expectedValue})`);
+
+        // If payment is approved, auto-move deal and notify Léo
+        if (paymentStatus === 'approved' && deal) {
+          // === Move deal to "Pagamento Efetuado" ===
+          try {
+            const { data: pgtoStage } = await supabase
+              .from('pipeline_stages')
+              .select('id, title')
+              .or('title.ilike.%pagamento efetuado%,title.ilike.%pago%')
+              .eq('is_active', true)
+              .limit(1)
+              .maybeSingle();
+
+            if (pgtoStage) {
+              const { data: oldStageData } = await supabase
+                .from('pipeline_stages')
+                .select('title')
+                .eq('id', deal.stage_id)
+                .maybeSingle();
+
+              await supabase
+                .from('deals')
+                .update({ stage_id: pgtoStage.id, stage: pgtoStage.title })
+                .eq('id', deal.id);
+
+              await supabase.from('memory_events').insert({
+                contact_id: conversation.contact_id,
+                conversation_id: conversation.id,
+                tipo: 'stage_change',
+                payload: {
+                  from_stage: oldStageData?.title || 'unknown',
+                  to_stage: pgtoStage.title,
+                  motivo: 'Pagamento validado automaticamente via comprovante',
+                  deal_id: deal.id,
+                  automated: true
+                }
+              });
+
+              console.log(`[Nina] 💳 Deal moved to "${pgtoStage.title}" after payment validation`);
+            }
+          } catch (stageErr) {
+            console.error('[Nina] Error moving deal after payment (non-fatal):', stageErr);
+          }
+
+          // === Notify Léo NVS about confirmed payment ===
+          try {
+            const contactName = conversation.contact?.call_name || conversation.contact?.name || conversation.contact?.phone_number || 'Desconhecido';
+            const contactPhone = conversation.contact?.phone_number || 'N/A';
+
+            // Get order items from inventory movements
+            const { data: movements } = await supabase
+              .from('inventory_movements')
+              .select('quantity, reason, inventory:inventory(product_name, price, unit)')
+              .eq('contact_id', conversation.contact_id)
+              .eq('type', 'out')
+              .order('created_at', { ascending: false })
+              .limit(10);
+
+            let itensLista = '';
+            if (movements && movements.length > 0) {
+              itensLista = movements.map((m: any) => {
+                const inv = m.inventory as any;
+                const itemTotal = (Number(inv?.price) || 0) * m.quantity;
+                return `   - ${m.quantity}x ${inv?.product_name || 'Produto'} — R$ ${itemTotal.toFixed(2)}`;
+              }).join('\n');
+            }
+
+            // Get the last image URL from messages (the receipt)
+            const { data: lastImageMsg } = await supabase
+              .from('messages')
+              .select('media_url')
+              .eq('conversation_id', conversation.id)
+              .eq('from_type', 'user')
+              .eq('type', 'image')
+              .order('sent_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const receiptUrl = lastImageMsg?.media_url || 'Não disponível';
+
+            const paymentNotification = `💳 *PAGAMENTO CONFIRMADO!*\n\n` +
+              `👤 Cliente: ${contactName}\n` +
+              `📱 Telefone: ${contactPhone}\n` +
+              `💰 Valor: R$ ${valorExtraido.toFixed(2)}\n` +
+              `📋 Tipo: ${tipoComprovante.toUpperCase()}\n` +
+              (itensLista ? `\n📦 *Itens:*\n${itensLista}\n` : '') +
+              (enderecoEntrega ? `\n📍 *Endereço:* ${enderecoEntrega}\n` : '') +
+              `\n🧾 *Comprovante:* ${receiptUrl}\n` +
+              `\n📅 ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Campo_Grande' })}\n` +
+              `\n✅ Pedido pronto para processamento!`;
+
+            const { data: defaultInstance } = await supabase
+              .from('whatsapp_instances')
+              .select('id')
+              .eq('is_default', true)
+              .eq('status', 'connected')
+              .maybeSingle();
+
+            if (defaultInstance) {
+              const LEO_NVS_PHONE = '556796089989';
+              const sendUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-evolution-message`;
+              fetch(sendUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+                },
+                body: JSON.stringify({
+                  instance_id: defaultInstance.id,
+                  phone_number: LEO_NVS_PHONE,
+                  content: paymentNotification,
+                  message_type: 'text'
+                })
+              }).catch(err => console.error('[Nina] Error notifying Leo about payment:', err));
+              console.log('[Nina] 📨 Payment confirmation sent to Leo NVS');
+            }
+          } catch (notifyErr) {
+            console.error('[Nina] Error sending payment notification (non-fatal):', notifyErr);
+          }
+        }
+      } catch (parseError) {
+        console.error('[Nina] Error processing validate_payment:', parseError);
       }
     }
 
