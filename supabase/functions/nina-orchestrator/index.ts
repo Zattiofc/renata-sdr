@@ -274,6 +274,39 @@ const reserveInventoryTool = {
   }
 };
 
+// Tool definition for validating payment receipts
+const validatePaymentTool = {
+  type: "function",
+  function: {
+    name: "validate_payment",
+    description: "Validar comprovante de pagamento enviado pelo cliente. Use SEMPRE que o cliente enviar uma imagem que parece ser um comprovante de pagamento/PIX/transferência. A ferramenta irá comparar o valor do comprovante com o total do pedido. Informe o valor que você conseguiu ler na imagem e o endereço de entrega se mencionado.",
+    parameters: {
+      type: "object",
+      properties: {
+        valor_extraido: {
+          type: "number",
+          description: "Valor em reais que você leu/extraiu do comprovante de pagamento (ex: 264.00)"
+        },
+        tipo_comprovante: {
+          type: "string",
+          enum: ["pix", "transferencia", "deposito", "outro", "nao_identificado"],
+          description: "Tipo de comprovante identificado na imagem"
+        },
+        endereco_entrega: {
+          type: "string",
+          description: "Endereço de entrega informado pelo cliente durante a conversa (se disponível)"
+        },
+        observacoes: {
+          type: "string",
+          description: "Observações adicionais sobre o comprovante (ex: 'valor parcial', 'imagem borrada')"
+        }
+      },
+      required: ["valor_extraido", "tipo_comprovante"],
+      additionalProperties: false
+    }
+  }
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
