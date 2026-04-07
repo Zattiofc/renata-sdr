@@ -16,12 +16,11 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    // Find chunks without embeddings
     const { data: chunks, error } = await supabase
       .from('knowledge_chunks')
       .select('id, content')
       .is('embedding', null)
-      .limit(3); // Process 3 at a time to avoid timeout
+      .limit(3);
 
     if (error) throw error;
 
@@ -38,6 +37,7 @@ serve(async (req) => {
 
     console.log(`[Backfill] Processing ${chunks.length} chunks without embeddings`);
 
+    // @ts-ignore - Supabase AI is available in edge runtime
     const session = new Supabase.ai.Session("gte-small");
     let successCount = 0;
 
@@ -62,7 +62,6 @@ serve(async (req) => {
       }
     }
 
-    // Count remaining
     const { count: remaining } = await supabase
       .from('knowledge_chunks')
       .select('*', { count: 'exact', head: true })
@@ -79,9 +78,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Backfill] Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

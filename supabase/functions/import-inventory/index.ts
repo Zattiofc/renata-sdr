@@ -219,6 +219,6 @@ Ignore linhas de cabeçalho, totais, ou linhas vazias.`;
 
   } catch (error) {
     console.error('[import-inventory] Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

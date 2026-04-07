@@ -482,7 +482,7 @@ function extractMessageContent(messageData: MessageData): { content: string; mes
   }
 
   // Filter out reaction messages — they are not real content
-  if (msg.reactionMessage || messageData.messageType === 'reactionMessage') {
+  if ((msg as any).reactionMessage || messageData.messageType === 'reactionMessage') {
     return { content: '', messageType: 'reaction', mediaUrl: null };
   }
 

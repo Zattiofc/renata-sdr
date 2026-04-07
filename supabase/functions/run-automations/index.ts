@@ -174,7 +174,7 @@ async function executeAction(supabase: any, automation: any, contactId: string, 
       contact_id: contactId,
       conversation_id: conversationId,
       result: 'error',
-      metadata: { error: err.message },
+      metadata: { error: (err as Error).message },
     })
   }
 }
