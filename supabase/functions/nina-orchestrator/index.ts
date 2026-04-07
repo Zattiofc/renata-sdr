@@ -403,8 +403,8 @@ serve(async (req) => {
           auto_response_enabled: false,
           system_prompt_override: null,
           ai_model_mode: 'flash',
-          response_delay_min: 1000,
-          response_delay_max: 3000,
+          response_delay_min: 2500,
+          response_delay_max: 5000,
           message_breaking_enabled: false,
           audio_response_enabled: false,
           elevenlabs_api_key: null,
@@ -1247,6 +1247,113 @@ async function cancelAppointmentFromAI(
   return data;
 }
 
+/**
+ * Send "composing" (typing) presence to WhatsApp via Evolution API.
+ * Non-blocking, fire-and-forget.
+ */
+async function sendTypingPresence(
+  supabase: any,
+  instanceId: string | null,
+  phoneNumber: string
+): Promise<void> {
+  if (!instanceId || !phoneNumber) return;
+  try {
+    const { data: instance } = await supabase
+      .from('whatsapp_instances')
+      .select('instance_name, instance_id_external, provider_type')
+      .eq('id', instanceId)
+      .maybeSingle();
+    if (!instance) return;
+
+    const { data: secrets } = await supabase
+      .from('whatsapp_instance_secrets')
+      .select('api_url, api_key')
+      .eq('instance_id', instanceId)
+      .maybeSingle();
+    if (!secrets?.api_url || !secrets?.api_key) return;
+
+    const identifier = instance.provider_type === 'evolution_cloud' && instance.instance_id_external
+      ? instance.instance_id_external
+      : instance.instance_name;
+
+    let digits = phoneNumber.replace(/\D/g, '');
+    if (!digits.startsWith('55') && digits.length <= 11) digits = '55' + digits;
+
+    const presenceUrl = `${secrets.api_url.replace(/\/$/, '')}/chat/sendPresence/${identifier}`;
+    await fetch(presenceUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': secrets.api_key },
+      body: JSON.stringify({
+        number: `${digits}@s.whatsapp.net`,
+        delay: 5000,
+        presence: 'composing',
+      }),
+    });
+    console.log(`[Nina] ⌨️ Typing presence sent to ${digits}`);
+  } catch (err) {
+    console.log('[Nina] Typing presence error (non-fatal):', err);
+  }
+}
+
+/**
+ * Debounce: wait DEBOUNCE_MS then aggregate all user messages that arrived
+ * after the trigger message into a single combined content for the AI.
+ */
+const DEBOUNCE_MS = 3000;
+
+async function debounceAndAggregate(
+  supabase: any,
+  conversationId: string,
+  triggerMessage: any
+): Promise<{ aggregatedContent: string; aggregatedMessageIds: string[] }> {
+  // Wait for the debounce window
+  await new Promise(resolve => setTimeout(resolve, DEBOUNCE_MS));
+
+  // Check for newer user messages that arrived during (or just before) the wait
+  const { data: recentUserMsgs } = await supabase
+    .from('messages')
+    .select('id, content, sent_at, type')
+    .eq('conversation_id', conversationId)
+    .eq('from_type', 'user')
+    .gte('sent_at', triggerMessage.sent_at)
+    .order('sent_at', { ascending: true })
+    .limit(20);
+
+  const allMsgs = (recentUserMsgs || []).filter(
+    (m: any) => m.content && m.content.trim() && m.type !== 'reaction'
+  );
+
+  if (allMsgs.length <= 1) {
+    return {
+      aggregatedContent: triggerMessage.content || '',
+      aggregatedMessageIds: [triggerMessage.id],
+    };
+  }
+
+  const aggregatedContent = allMsgs.map((m: any) => m.content.trim()).join('\n');
+  const aggregatedMessageIds = allMsgs.map((m: any) => m.id);
+
+  console.log(`[Nina] 🔗 Debounce aggregated ${allMsgs.length} messages into one block (${aggregatedContent.length} chars)`);
+
+  // Mark all aggregated messages as processed (except the trigger, handled later)
+  const extraIds = aggregatedMessageIds.filter((id: string) => id !== triggerMessage.id);
+  if (extraIds.length > 0) {
+    await supabase
+      .from('messages')
+      .update({ processed_by_nina: true })
+      .in('id', extraIds);
+
+    // Also complete any pending queue items for these messages
+    await supabase
+      .from('nina_processing_queue')
+      .update({ status: 'completed', processed_at: new Date().toISOString(), error_message: 'Aggregated by debounce' })
+      .in('message_id', extraIds)
+      .eq('status', 'pending');
+  }
+
+  return { aggregatedContent, aggregatedMessageIds };
+}
+
 async function processQueueItem(
   supabase: any,
   item: any,
@@ -1301,19 +1408,27 @@ async function processQueueItem(
     return;
   }
 
+  // === DEBOUNCE: Wait 3s and aggregate multiple rapid messages ===
+  const { aggregatedContent, aggregatedMessageIds } = await debounceAndAggregate(
+    supabase, conversation.id, message
+  );
+
+  // After debounce, re-check for even newer messages (someone sent more after the window)
   const { data: newerUserMessage } = await supabase
     .from('messages')
     .select('id, sent_at, content')
     .eq('conversation_id', conversation.id)
     .eq('from_type', 'user')
-    .gt('sent_at', message.sent_at)
+    .gt('sent_at', aggregatedMessageIds.length > 1 
+      ? (await supabase.from('messages').select('sent_at').eq('id', aggregatedMessageIds[aggregatedMessageIds.length - 1]).single()).data?.sent_at || message.sent_at
+      : message.sent_at)
     .order('sent_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (newerUserMessage) {
     console.log(
-      `[Nina] Skipping stale response for ${message.id} because newer user message ${newerUserMessage.id} already exists`
+      `[Nina] Skipping stale response for ${message.id} because newer user message ${newerUserMessage.id} arrived after debounce window`
     );
     await supabase
       .from('messages')
@@ -1321,6 +1436,17 @@ async function processQueueItem(
       .eq('id', message.id);
     return;
   }
+
+  // === TYPING INDICATOR: Send "composing" before AI processing ===
+  sendTypingPresence(
+    supabase,
+    conversation.instance_id,
+    conversation.contact?.phone_number
+  ).catch(() => {}); // fire-and-forget
+
+  // Override message content with aggregated content for the rest of processing
+  const originalMessageContent = message.content;
+  message.content = aggregatedContent;
 
   // Get recent messages for context (last 20) — persistent context window
   const { data: recentMessages } = await supabase
