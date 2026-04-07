@@ -1604,9 +1604,19 @@ export const api = {
    * Delete a single message
    */
   deleteMessage: async (messageId: string): Promise<void> => {
-    // First remove references in message_grouping_queue
+    // Remove references in related queues
     await supabase
       .from('message_grouping_queue')
+      .delete()
+      .eq('message_id', messageId);
+
+    await supabase
+      .from('send_queue')
+      .delete()
+      .eq('message_id', messageId);
+
+    await supabase
+      .from('nina_processing_queue')
       .delete()
       .eq('message_id', messageId);
 
