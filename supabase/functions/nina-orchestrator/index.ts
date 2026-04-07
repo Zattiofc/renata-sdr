@@ -286,9 +286,9 @@ serve(async (req) => {
   try {
     console.log('[Nina] Starting orchestration...');
 
-    // Claim batch of messages to process (reduced batch size to prevent timeouts)
+    // Claim batch of messages to process - PROCESS ONLY ONE AT A TIME TO PRESERVE ORDER
     const { data: queueItems, error: claimError } = await supabase
-      .rpc('claim_nina_processing_batch', { p_limit: 3 });
+      .rpc('claim_nina_processing_batch', { p_limit: 1 });
 
     if (claimError) {
       console.error('[Nina] Error claiming batch:', claimError);
@@ -449,17 +449,28 @@ serve(async (req) => {
           continue;
         }
 
-        // Use default prompt if not configured
-        const systemPrompt = effectiveSettings.system_prompt_override || getDefaultSystemPrompt();
-        
-        console.log('[Nina] Processing with settings:', {
-          is_active: effectiveSettings.is_active,
-          auto_response_enabled: effectiveSettings.auto_response_enabled,
-          ai_model_mode: effectiveSettings.ai_model_mode,
-          has_system_prompt: !!effectiveSettings.system_prompt_override,
-          has_whatsapp_config: !!effectiveSettings.whatsapp_phone_number_id,
-          has_elevenlabs: !!effectiveSettings.elevenlabs_api_key,
-        });
+        // Fetch conversation history with strict ordering to avoid context confusion
+        const { data: messages, error: messagesError } = await supabase
+          .from('messages')
+          .select('content, from_type, sent_at')
+          .eq('conversation_id', conversation.id)
+          .order('sent_at', { ascending: true })
+          .limit(20);
+
+        if (messagesError) {
+          console.error('[Nina] Error fetching conversation history:', messagesError);
+          // Don't crash, but log and proceed
+        }
+
+        // Enforce strict ordering: system prompt MUST include a rule about context
+        const strictSystemPrompt = `${systemPrompt}
+
+        ---
+        REGRA DE OURO DE CONTEXTO:
+        Você está em uma conversa específica. Se a pergunta do lead não fizer sentido com o histórico recente, 
+        NÃO alucine. Pergunte gentilmente: "Desculpe, você se refere ao assunto que estávamos tratando ou a algo novo?"
+        Nunca misture contextos de conversas anteriores.
+        ---`;
         
         await processQueueItem(supabase, item, systemPrompt, effectiveSettings);
         
