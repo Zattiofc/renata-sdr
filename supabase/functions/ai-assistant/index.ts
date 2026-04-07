@@ -1047,7 +1047,7 @@ async function executeDatabaseQuery(supabase: any, args: any) {
     }
     return { data, count: Array.isArray(data) ? data.length : 1 };
   } catch (e) {
-    return { error: `Erro: ${e.message}` };
+    return { error: `Erro: ${(e as Error).message}` };
   }
 }
 
