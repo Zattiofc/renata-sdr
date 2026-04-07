@@ -125,6 +125,7 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
     company_name: null,
     sdr_name: null,
     ai_scheduling_enabled: true,
+    is_24_7: false,
   });
 
   useImperativeHandle(ref, () => ({
