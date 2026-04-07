@@ -18,9 +18,10 @@ function errorResponse(message: string, status = 400) {
 }
 
 /**
- * Execute SQL directly via postgres connection (bypasses RPC UUID issues)
+ * Execute SQL directly via postgres connection.
+ * Supports parameterized queries: execSQL("SELECT * FROM t WHERE id = $1", ["uuid-here"])
  */
-async function execSQL(query: string): Promise<{ rows: unknown[]; rowCount: number; command: string }> {
+async function execSQL(query: string, params?: unknown[]): Promise<{ rows: unknown[]; rowCount: number; command: string }> {
   const dbUrl = Deno.env.get('SUPABASE_DB_URL');
   if (!dbUrl) throw new Error('SUPABASE_DB_URL not configured');
 
@@ -28,7 +29,13 @@ async function execSQL(query: string): Promise<{ rows: unknown[]; rowCount: numb
   const pool = new Pool(dbUrl, 1, true);
   const conn = await pool.connect();
   try {
-    const result = await conn.queryObject(query);
+    let result;
+    if (params && params.length > 0) {
+      // Use parameterized query — safe from injection and type coercion issues
+      result = await conn.queryObject(query, params);
+    } else {
+      result = await conn.queryObject(query);
+    }
     return {
       rows: result.rows as unknown[],
       rowCount: result.rowCount ?? 0,
@@ -58,24 +65,37 @@ serve(async (req) => {
   );
 
   try {
-    const body = await req.json();
+    const rawBody = await req.text();
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (parseErr) {
+      console.error('[OpenClaw API] JSON parse error:', parseErr, '| raw:', rawBody.substring(0, 500));
+      return errorResponse('Invalid JSON body', 400);
+    }
     const { action } = body;
 
     // ==================== QUERY (SELECT via SDK) ====================
     if (action === 'query') {
-      const { table, select = '*', filters = [], order, limit = 50, offset = 0 } = body;
+      const { table, select = '*', filters = [], order, limit = 50, offset = 0 } = body as any;
       if (!table) return errorResponse('Missing "table"');
 
       let query = supabase.from(table).select(select);
       for (const f of filters) {
         if (!f.col || !f.op) continue;
         const ops: Record<string, (q: any, c: string, v: any) => any> = {
-          eq: (q, c, v) => q.eq(c, v), neq: (q, c, v) => q.neq(c, v),
-          gt: (q, c, v) => q.gt(c, v), gte: (q, c, v) => q.gte(c, v),
-          lt: (q, c, v) => q.lt(c, v), lte: (q, c, v) => q.lte(c, v),
-          like: (q, c, v) => q.like(c, v), ilike: (q, c, v) => q.ilike(c, v),
-          is: (q, c, v) => q.is(c, v), in: (q, c, v) => q.in(c, v),
-          contains: (q, c, v) => q.contains(c, v), containedBy: (q, c, v) => q.containedBy(c, v),
+          eq: (q: any, c: string, v: any) => q.eq(c, v),
+          neq: (q: any, c: string, v: any) => q.neq(c, v),
+          gt: (q: any, c: string, v: any) => q.gt(c, v),
+          gte: (q: any, c: string, v: any) => q.gte(c, v),
+          lt: (q: any, c: string, v: any) => q.lt(c, v),
+          lte: (q: any, c: string, v: any) => q.lte(c, v),
+          like: (q: any, c: string, v: any) => q.like(c, v),
+          ilike: (q: any, c: string, v: any) => q.ilike(c, v),
+          is: (q: any, c: string, v: any) => q.is(c, v),
+          in: (q: any, c: string, v: any) => q.in(c, v),
+          contains: (q: any, c: string, v: any) => q.contains(c, v),
+          containedBy: (q: any, c: string, v: any) => q.containedBy(c, v),
         };
         if (ops[f.op]) query = ops[f.op](query, f.col, f.val);
       }
@@ -89,7 +109,7 @@ serve(async (req) => {
 
     // ==================== INSERT (SDK) ====================
     if (action === 'insert') {
-      const { table, data } = body;
+      const { table, data } = body as any;
       if (!table || !data) return errorResponse('Missing "table" or "data"');
       const { data: result, error } = await supabase.from(table).insert(data).select();
       if (error) return errorResponse(error.message, 500);
@@ -98,7 +118,7 @@ serve(async (req) => {
 
     // ==================== UPDATE (SDK) ====================
     if (action === 'update') {
-      const { table, data, filters = [] } = body;
+      const { table, data, filters = [] } = body as any;
       if (!table || !data) return errorResponse('Missing "table" or "data"');
       if (filters.length === 0) return errorResponse('Updates require at least one filter');
       let query = supabase.from(table).update(data);
@@ -113,7 +133,7 @@ serve(async (req) => {
 
     // ==================== DELETE (SDK) ====================
     if (action === 'delete') {
-      const { table, filters = [] } = body;
+      const { table, filters = [] } = body as any;
       if (!table) return errorResponse('Missing "table"');
       if (filters.length === 0) return errorResponse('Deletes require at least one filter');
       let query = supabase.from(table).delete();
@@ -128,7 +148,7 @@ serve(async (req) => {
 
     // ==================== RPC ====================
     if (action === 'rpc') {
-      const { function_name, params = {} } = body;
+      const { function_name, params = {} } = body as any;
       if (!function_name) return errorResponse('Missing "function_name"');
       const { data, error } = await supabase.rpc(function_name, params);
       if (error) return errorResponse(error.message, 500);
@@ -136,27 +156,31 @@ serve(async (req) => {
     }
 
     // ==================== SQL (read-only, direct PG) ====================
+    // Supports: { action: "sql", query: "SELECT * FROM t WHERE id = $1", params: ["uuid"] }
+    // Or plain: { action: "sql", query: "SELECT * FROM t WHERE id = 'uuid'" }
     if (action === 'sql') {
-      const { query } = body;
+      const { query, params } = body as { query?: string; params?: unknown[] };
       if (!query) return errorResponse('Missing "query"');
-      console.log('[OpenClaw API] sql:', query);
+      console.log('[OpenClaw API] sql:', query, '| params:', JSON.stringify(params ?? []));
       try {
-        const result = await execSQL(query);
+        const result = await execSQL(query, params);
         return jsonResponse({ data: result.rows, count: result.rowCount });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[OpenClaw API] sql error:', msg, '| query:', query);
+        console.error('[OpenClaw API] sql error:', msg, '| query:', query, '| params:', JSON.stringify(params ?? []));
         return errorResponse(`SQL error: ${msg}`, 500);
       }
     }
 
     // ==================== SQL MUTATION (direct PG) ====================
+    // Supports: { action: "sql_mutation", query: "DELETE FROM t WHERE id = $1", params: ["uuid"] }
+    // Or plain: { action: "sql_mutation", query: "DELETE FROM t WHERE id = 'uuid'::uuid" }
     if (action === 'sql_mutation') {
-      const { query } = body;
+      const { query, params } = body as { query?: string; params?: unknown[] };
       if (!query) return errorResponse('Missing "query"');
-      console.log('[OpenClaw API] sql_mutation:', query);
+      console.log('[OpenClaw API] sql_mutation:', query, '| params:', JSON.stringify(params ?? []));
       try {
-        const result = await execSQL(query);
+        const result = await execSQL(query, params);
         return jsonResponse({
           data: {
             affected_rows: result.command === 'SELECT' ? result.rows.length : result.rowCount,
@@ -167,7 +191,7 @@ serve(async (req) => {
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[OpenClaw API] sql_mutation error:', msg, '| query:', query);
+        console.error('[OpenClaw API] sql_mutation error:', msg, '| query:', query, '| params:', JSON.stringify(params ?? []));
         return errorResponse(`SQL error: ${msg}`, 500);
       }
     }
@@ -188,15 +212,15 @@ serve(async (req) => {
 
     // ==================== DESCRIBE ====================
     if (action === 'describe') {
-      const { table } = body;
+      const { table } = body as any;
       if (!table) return errorResponse('Missing "table"');
       try {
-        const safeName = table.replace(/'/g, "''");
         const result = await execSQL(
           `SELECT column_name, data_type, is_nullable, column_default
            FROM information_schema.columns
-           WHERE table_schema = 'public' AND table_name = '${safeName}'
-           ORDER BY ordinal_position`
+           WHERE table_schema = 'public' AND table_name = $1
+           ORDER BY ordinal_position`,
+          [table]
         );
         return jsonResponse({ data: result.rows });
       } catch (err) {
@@ -207,7 +231,7 @@ serve(async (req) => {
 
     // ==================== INVOKE EDGE FUNCTION ====================
     if (action === 'invoke') {
-      const { function_name, payload = {} } = body;
+      const { function_name, payload = {} } = body as any;
       if (!function_name) return errorResponse('Missing "function_name"');
       const { data, error } = await supabase.functions.invoke(function_name, { body: payload });
       if (error) return errorResponse(error.message, 500);
@@ -219,7 +243,9 @@ serve(async (req) => {
       return jsonResponse({
         status: 'ok',
         timestamp: new Date().toISOString(),
+        version: '2.0.0',
         actions: ['query', 'insert', 'update', 'delete', 'rpc', 'sql', 'sql_mutation', 'list_tables', 'describe', 'invoke', 'health'],
+        notes: 'sql/sql_mutation now support parameterized queries via "params" array. Use $1, $2, etc. in query string.',
       });
     }
 
