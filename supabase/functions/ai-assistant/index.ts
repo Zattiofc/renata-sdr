@@ -1080,7 +1080,7 @@ async function executeDatabaseMutation(supabase: any, args: any) {
     const result = await resp.json();
     return { success: true, result, message: "Query executada com sucesso" };
   } catch (e) {
-    return { error: `Erro: ${e.message}` };
+    return { error: `Erro: ${(e as Error).message}` };
   }
 }
 
