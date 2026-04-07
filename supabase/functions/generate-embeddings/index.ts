@@ -116,6 +116,7 @@ serve(async (req) => {
     }
 
     // Generate embeddings
+    // @ts-ignore - Supabase AI is available in edge runtime
     const session = new Supabase.ai.Session("gte-small");
     let successCount = 0;
 
@@ -188,7 +189,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('[Embeddings] Error:', error);
     
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });

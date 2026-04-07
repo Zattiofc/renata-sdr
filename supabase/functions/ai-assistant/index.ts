@@ -703,7 +703,7 @@ async function executeSendWhatsAppMessage(supabase: any, args: any) {
     });
     if (!resp.ok) return { error: `Falha: ${await resp.text()}` };
     return { success: true, message: `Mensagem enviada para ${phone}` };
-  } catch (e) { return { error: e.message }; }
+  } catch (e) { return { error: (e as Error).message }; }
 }
 
 async function executeSendBulkFollowup(supabase: any, args: any) {
@@ -1047,7 +1047,7 @@ async function executeDatabaseQuery(supabase: any, args: any) {
     }
     return { data, count: Array.isArray(data) ? data.length : 1 };
   } catch (e) {
-    return { error: `Erro: ${e.message}` };
+    return { error: `Erro: ${(e as Error).message}` };
   }
 }
 
@@ -1080,7 +1080,7 @@ async function executeDatabaseMutation(supabase: any, args: any) {
     const result = await resp.json();
     return { success: true, result, message: "Query executada com sucesso" };
   } catch (e) {
-    return { error: `Erro: ${e.message}` };
+    return { error: `Erro: ${(e as Error).message}` };
   }
 }
 
@@ -1327,6 +1327,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ content: finalContent }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("ai-assistant error:", e);
-    return new Response(JSON.stringify({ error: e.message || "Erro interno" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: (e as Error).message || "Erro interno" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
