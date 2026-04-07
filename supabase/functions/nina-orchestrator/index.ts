@@ -1757,9 +1757,18 @@ REGRA: Avalie CADA resposta do cliente e mova automaticamente para o estágio co
 Se o cliente demonstrar interesse → "Em Qualificação"
 Se confirmar pedido → "Pedido Montado"  
 Se confirmar pagamento → "Aguardando Pagamento"
-Se enviar comprovante → "Pagamento Efetuado"
+Se enviar comprovante → USE validate_payment para validar e mover automaticamente para "Pagamento Efetuado"
 Se desistir/não querer → "Perdido"
 Estágio atual do lead: ${currentStageName}
+
+VALIDAÇÃO DE COMPROVANTE (OBRIGATÓRIO):
+Quando o cliente enviar uma IMAGEM que pareça ser um comprovante de pagamento (PIX, transferência, depósito):
+1. Analise visualmente o comprovante na imagem
+2. Extraia o VALOR do comprovante
+3. Chame a ferramenta validate_payment com o valor extraído
+4. Se o valor for menor que o esperado, informe ao cliente a diferença
+5. Se o valor estiver correto, confirme o pagamento
+6. NÃO confirme pagamento sem usar validate_payment
 </pipeline_context>`;
       
       console.log(`[Nina] Pipeline context injected: ${pipelineStages.length} stages, current: ${currentStageName}`);
