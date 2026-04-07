@@ -226,8 +226,9 @@ const ChatInterface: React.FC = () => {
     if (!activeChat) return;
     try {
       await api.clearChat(activeChat.id);
-      toast.success('Chat limpo com sucesso');
+      toast.success('Todas as mensagens foram apagadas do banco de dados');
       setClearChatConfirm(false);
+      await refetch();
     } catch {
       toast.error('Erro ao limpar chat');
     }
