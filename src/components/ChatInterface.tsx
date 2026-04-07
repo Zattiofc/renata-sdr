@@ -214,8 +214,9 @@ const ChatInterface: React.FC = () => {
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await api.deleteMessage(messageId);
-      toast.success('Mensagem apagada');
+      toast.success('Mensagem apagada do banco de dados');
       setDeleteMessageId(null);
+      await refetch();
     } catch {
       toast.error('Erro ao apagar mensagem');
     }
