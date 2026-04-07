@@ -31,6 +31,7 @@ interface AgentSettings {
   company_name: string | null;
   sdr_name: string | null;
   ai_scheduling_enabled: boolean;
+  is_24_7: boolean;
 }
 
 const AI_PROVIDERS = [
