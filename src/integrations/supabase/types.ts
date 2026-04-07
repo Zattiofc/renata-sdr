@@ -2874,6 +2874,7 @@ export type Database = {
       }
     }
     Functions: {
+      auto_unlock_stuck_conversations: { Args: never; Returns: undefined }
       claim_message_processing_batch: {
         Args: { p_limit?: number }
         Returns: {
