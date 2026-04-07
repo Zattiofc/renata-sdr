@@ -387,50 +387,73 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
 
           {/* Business Hours */}
           <div className="rounded-xl border border-border bg-card p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Calendar className="w-5 h-5 text-indigo-600" />
-              <h3 className="font-semibold text-foreground">Horário de Atendimento</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-semibold text-foreground">Horário de Atendimento</h3>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className={`text-xs font-medium ${settings.is_24_7 ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                  24/7
+                </span>
+                <button
+                  onClick={() => setSettings({ ...settings, is_24_7: !settings.is_24_7 })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    settings.is_24_7 ? 'bg-emerald-500' : 'bg-muted'
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    settings.is_24_7 ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </label>
             </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Início</label>
-                  <input
-                    type="time"
-                    value={settings.business_hours_start}
-                    onChange={(e) => setSettings({ ...settings, business_hours_start: e.target.value })}
-                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                  />
+            {settings.is_24_7 ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-emerald-500 text-sm">✓ Atendimento 24 horas, 7 dias por semana</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Início</label>
+                    <input
+                      type="time"
+                      value={settings.business_hours_start}
+                      onChange={(e) => setSettings({ ...settings, business_hours_start: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Fim</label>
+                    <input
+                      type="time"
+                      value={settings.business_hours_end}
+                      onChange={(e) => setSettings({ ...settings, business_hours_end: e.target.value })}
+                      className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Fim</label>
-                  <input
-                    type="time"
-                    value={settings.business_hours_end}
-                    onChange={(e) => setSettings({ ...settings, business_hours_end: e.target.value })}
-                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                  />
+                  <label className="text-xs font-medium text-muted-foreground mb-2 block">Dias da Semana</label>
+                  <div className="flex gap-2">
+                    {DAYS_OF_WEEK.map(day => (
+                      <button
+                        key={day.value}
+                        onClick={() => toggleBusinessDay(day.value)}
+                        className={`flex-1 h-9 text-xs font-medium rounded-lg transition-all ${
+                          settings.business_days.includes(day.value)
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-secondary'
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-2 block">Dias da Semana</label>
-                <div className="flex gap-2">
-                  {DAYS_OF_WEEK.map(day => (
-                    <button
-                      key={day.value}
-                      onClick={() => toggleBusinessDay(day.value)}
-                      className={`flex-1 h-9 text-xs font-medium rounded-lg transition-all ${
-                        settings.business_days.includes(day.value)
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground hover:bg-secondary'
-                      }`}
-                    >
-                      {day.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
