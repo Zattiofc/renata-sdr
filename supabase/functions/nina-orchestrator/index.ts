@@ -1810,7 +1810,7 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
   console.log('[Nina] Using AI config:', { provider: aiConfig.provider, model: aiConfig.model });
 
   // Build tools array - only add appointment tools if enabled
-  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool, checkInventoryTool, reserveInventoryTool]; // Always available
+  const tools: any[] = [setCallNameTool, updateLeadProfileTool, classifyIntentTool, updateDealStageTool, checkInventoryTool, reserveInventoryTool, validatePaymentTool]; // Always available
   if (settings?.ai_scheduling_enabled !== false) {
     tools.push(createAppointmentTool);
     tools.push(rescheduleAppointmentTool);
