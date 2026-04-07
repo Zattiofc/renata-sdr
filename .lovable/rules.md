@@ -24,5 +24,15 @@ O `system_prompt` da `nina-orchestrator` contém regra de isolamento de contexto
 ### 4. Processamento Sequencial (batch 1)
 A fila de processamento opera em modo sequencial (batch size = 1) com monitoramento anti-travamento. **Manter este comportamento.**
 
-### 5. Ordem de Mensagens (chunk_group_id + chunk_index)
+### 8. Ordem de Mensagens (chunk_group_id + chunk_index)
 O `send_queue` usa `chunk_group_id` e `chunk_index` para garantir entrega ordenada. Chunk N só processa após chunk N-1 ser `completed`. **Não alterar esta lógica.**
+
+## Instruções para Futuros Deploys
+
+Em todo novo deploy, verificar preservação de:
+1. Coluna `processing_locked` em `conversations`
+2. Índice `idx_knowledge_chunks_embedding` em `knowledge_chunks`
+3. Função `auto_unlock_stuck_conversations`
+4. Lógica de lock/unlock no `nina-orchestrator`
+
+Se houver divergência de esquema, as alterações acima são a **fonte da verdade**.
