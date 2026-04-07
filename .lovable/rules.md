@@ -1,10 +1,17 @@
 # Regras Técnicas Obrigatórias
 
-## Nina Orchestrator — Não Alterar
+## Esquema de Banco — Preservação Obrigatória
 
 ### 1. `processing_locked` (conversations)
-A coluna `public.conversations.processing_locked` é **obrigatória**. Garante processamento sequencial de mensagens, evitando concorrência e quebra de ordem cronológica. **NUNCA remover ou sobrescrever.**
+A coluna `public.conversations.processing_locked` (BOOLEAN DEFAULT false) é **obrigatória**. Garante processamento sequencial de mensagens, evitando concorrência e quebra de ordem cronológica. **NUNCA remover, renomear ou sobrescrever.**
 
+### 2. Índice vetorial `idx_knowledge_chunks_embedding`
+O índice em `public.knowledge_chunks.embedding` é essencial para a performance da busca RAG. **Não remover.**
+
+### 3. Função `public.auto_unlock_stuck_conversations`
+Função de segurança que auto-destrava conversas travadas há mais de 2 minutos. **Não remover.** É a rede de segurança contra falhas do orchestrator.
+
+## Nina Orchestrator — Não Alterar
 ### 2. System Prompt — Isolamento de Contexto
 O `system_prompt` da `nina-orchestrator` contém regra de isolamento de contexto que impede alucinações de conversas passadas afetarem novos contatos. **Preservar sempre.**
 
