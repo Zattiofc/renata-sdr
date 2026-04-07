@@ -140,10 +140,37 @@ serve(async (req) => {
 
     // ==================== SQL MUTATION ====================
     if (action === 'sql_mutation') {
-      // { action: "sql_mutation", query: "UPDATE ..." }
+      // { action: "sql_mutation", query: "UPDATE ... WHERE id = 'uuid'::uuid" }
       const { query } = body;
       if (!query) return errorResponse('Missing "query"');
 
+      // Use direct PostgreSQL connection to avoid RPC UUID casting issues
+      const dbUrl = Deno.env.get('SUPABASE_DB_URL');
+      if (dbUrl) {
+        try {
+          const { Pool } = await import("https://deno.land/x/postgres@v0.19.3/mod.ts");
+          const pool = new Pool(dbUrl, 1, true);
+          const conn = await pool.connect();
+          try {
+            const result = await conn.queryObject(query);
+            return jsonResponse({ 
+              data: { 
+                affected_rows: result.command === 'SELECT' ? result.rows.length : result.rowCount ?? 0, 
+                rows: result.rows,
+                success: true 
+              } 
+            });
+          } finally {
+            conn.release();
+            await pool.end();
+          }
+        } catch (dbErr) {
+          const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+          return errorResponse(`SQL error: ${msg}`, 500);
+        }
+      }
+
+      // Fallback to RPC if no DB_URL
       const { data, error } = await supabase.rpc('execute_mutation_query', { sql_query: query });
       if (error) return errorResponse(error.message, 500);
       return jsonResponse({ data });
