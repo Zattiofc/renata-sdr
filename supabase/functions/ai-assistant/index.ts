@@ -703,7 +703,7 @@ async function executeSendWhatsAppMessage(supabase: any, args: any) {
     });
     if (!resp.ok) return { error: `Falha: ${await resp.text()}` };
     return { success: true, message: `Mensagem enviada para ${phone}` };
-  } catch (e) { return { error: e.message }; }
+  } catch (e) { return { error: (e as Error).message }; }
 }
 
 async function executeSendBulkFollowup(supabase: any, args: any) {
