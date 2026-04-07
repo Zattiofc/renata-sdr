@@ -116,6 +116,7 @@ serve(async (req) => {
     }
 
     // Generate embeddings
+    // @ts-ignore - Supabase AI is available in edge runtime
     const session = new Supabase.ai.Session("gte-small");
     let successCount = 0;
 
