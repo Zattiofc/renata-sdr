@@ -1,0 +1,1 @@
+ALTER TABLE public.nina_settings ADD COLUMN IF NOT EXISTS is_24_7 boolean NOT NULL DEFAULT false;

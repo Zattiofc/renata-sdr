@@ -1610,6 +1610,7 @@ export type Database = {
           evolution_api_key: string | null
           evolution_api_url: string | null
           id: string
+          is_24_7: boolean
           is_active: boolean
           message_breaking_enabled: boolean
           response_delay_max: number
@@ -1653,6 +1654,7 @@ export type Database = {
           evolution_api_key?: string | null
           evolution_api_url?: string | null
           id?: string
+          is_24_7?: boolean
           is_active?: boolean
           message_breaking_enabled?: boolean
           response_delay_max?: number
@@ -1696,6 +1698,7 @@ export type Database = {
           evolution_api_key?: string | null
           evolution_api_url?: string | null
           id?: string
+          is_24_7?: boolean
           is_active?: boolean
           message_breaking_enabled?: boolean
           response_delay_max?: number

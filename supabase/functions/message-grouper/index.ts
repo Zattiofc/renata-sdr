@@ -160,13 +160,12 @@ serve(async (req) => {
           // Check nina_settings to see if agent is active
           const { data: agentSettings } = await supabase
             .from('nina_settings')
-            .select('is_active, auto_response_enabled')
+            .select('is_active, auto_response_enabled, is_24_7, business_hours_start, business_hours_end, business_days, timezone')
             .limit(1)
             .maybeSingle();
           
           if (agentSettings && agentSettings.is_active === false) {
             console.log(`[MessageGrouper] Agent is DISABLED (is_active=false), skipping AI processing for ${phoneNumber}`);
-            // Mark queue items as processed
             await supabase
               .from('message_grouping_queue')
               .update({ processed: true })
@@ -183,6 +182,40 @@ serve(async (req) => {
               .in('id', messages.map(m => m.id));
             processedCount += messages.length;
             continue;
+          }
+
+          // Check business hours (skip if 24/7 mode is enabled)
+          if (agentSettings && !agentSettings.is_24_7) {
+            const tz = agentSettings.timezone || 'America/Sao_Paulo';
+            const nowInTz = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+            const currentDay = nowInTz.getDay(); // 0=Sun, 1=Mon...
+            const currentMinutes = nowInTz.getHours() * 60 + nowInTz.getMinutes();
+            
+            const allowedDays: number[] = agentSettings.business_days || [1,2,3,4,5];
+            const [startH, startM] = (agentSettings.business_hours_start || '09:00').split(':').map(Number);
+            const [endH, endM] = (agentSettings.business_hours_end || '18:00').split(':').map(Number);
+            const startMinutes = startH * 60 + (startM || 0);
+            const endMinutes = endH * 60 + (endM || 0);
+            
+            let isWithinHours = false;
+            if (!allowedDays.includes(currentDay)) {
+              isWithinHours = false;
+            } else if (endMinutes <= startMinutes) {
+              // Overnight range (e.g., 22:00 - 06:00)
+              isWithinHours = currentMinutes >= startMinutes || currentMinutes < endMinutes;
+            } else {
+              isWithinHours = currentMinutes >= startMinutes && currentMinutes < endMinutes;
+            }
+            
+            if (!isWithinHours) {
+              console.log(`[MessageGrouper] Outside business hours (day=${currentDay}, time=${nowInTz.getHours()}:${nowInTz.getMinutes()}, range=${agentSettings.business_hours_start}-${agentSettings.business_hours_end}), skipping AI for ${phoneNumber}`);
+              await supabase
+                .from('message_grouping_queue')
+                .update({ processed: true })
+                .in('id', messages.map(m => m.id));
+              processedCount += messages.length;
+              continue;
+            }
           }
           const { data: queueResult, error: ninaQueueError } = await supabase
             .from('nina_processing_queue')

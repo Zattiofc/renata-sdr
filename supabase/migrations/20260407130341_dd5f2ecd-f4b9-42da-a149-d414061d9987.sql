@@ -1,0 +1,1 @@
+UPDATE public.nina_settings SET is_24_7 = true WHERE is_24_7 = false;
