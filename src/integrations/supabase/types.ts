@@ -520,6 +520,7 @@ export type Database = {
           last_message_at: string
           metadata: Json | null
           nina_context: Json | null
+          processing_locked: boolean | null
           started_at: string
           status: Database["public"]["Enums"]["conversation_status"]
           tags: string[] | null
@@ -537,6 +538,7 @@ export type Database = {
           last_message_at?: string
           metadata?: Json | null
           nina_context?: Json | null
+          processing_locked?: boolean | null
           started_at?: string
           status?: Database["public"]["Enums"]["conversation_status"]
           tags?: string[] | null
@@ -554,6 +556,7 @@ export type Database = {
           last_message_at?: string
           metadata?: Json | null
           nina_context?: Json | null
+          processing_locked?: boolean | null
           started_at?: string
           status?: Database["public"]["Enums"]["conversation_status"]
           tags?: string[] | null
