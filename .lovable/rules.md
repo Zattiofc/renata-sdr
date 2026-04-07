@@ -12,7 +12,10 @@ O índice em `public.knowledge_chunks.embedding` é essencial para a performance
 Função de segurança que auto-destrava conversas travadas há mais de 2 minutos. **Não remover.** É a rede de segurança contra falhas do orchestrator.
 
 ## Nina Orchestrator — Não Alterar
-### 2. System Prompt — Isolamento de Contexto
+### 4. Lógica de Lock/Unlock no Orchestrator
+A `nina-orchestrator` usa `lockConversation` e `unlockConversation` para travar a conversa durante processamento. **Preservar esta lógica em todos os deploys.**
+
+### 5. System Prompt — Isolamento de Contexto
 O `system_prompt` da `nina-orchestrator` contém regra de isolamento de contexto que impede alucinações de conversas passadas afetarem novos contatos. **Preservar sempre.**
 
 ### 3. Índices de Performance
