@@ -32,7 +32,7 @@ import {
 import AddContactModal from './AddContactModal';
 
 const ChatInterface: React.FC = () => {
-  const { conversations, loading, sendMessage, updateStatus, markAsRead, assignConversation } = useConversations();
+  const { conversations, loading, sendMessage, updateStatus, markAsRead, assignConversation, refetch } = useConversations();
   const { sdrName, companyName } = useCompanySettings();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -214,8 +214,9 @@ const ChatInterface: React.FC = () => {
   const handleDeleteMessage = async (messageId: string) => {
     try {
       await api.deleteMessage(messageId);
-      toast.success('Mensagem apagada');
+      toast.success('Mensagem apagada do banco de dados');
       setDeleteMessageId(null);
+      await refetch();
     } catch {
       toast.error('Erro ao apagar mensagem');
     }
@@ -225,8 +226,9 @@ const ChatInterface: React.FC = () => {
     if (!activeChat) return;
     try {
       await api.clearChat(activeChat.id);
-      toast.success('Chat limpo com sucesso');
+      toast.success('Todas as mensagens foram apagadas do banco de dados');
       setClearChatConfirm(false);
+      await refetch();
     } catch {
       toast.error('Erro ao limpar chat');
     }

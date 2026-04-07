@@ -1604,9 +1604,19 @@ export const api = {
    * Delete a single message
    */
   deleteMessage: async (messageId: string): Promise<void> => {
-    // First remove references in message_grouping_queue
+    // Remove references in related queues
     await supabase
       .from('message_grouping_queue')
+      .delete()
+      .eq('message_id', messageId);
+
+    await supabase
+      .from('send_queue')
+      .delete()
+      .eq('message_id', messageId);
+
+    await supabase
+      .from('nina_processing_queue')
       .delete()
       .eq('message_id', messageId);
 
@@ -1633,13 +1643,35 @@ export const api = {
 
     if (messages && messages.length > 0) {
       const messageIds = messages.map(m => m.id);
-      // Remove references in message_grouping_queue
+      // Remove references in all related queues
       await supabase
         .from('message_grouping_queue')
         .delete()
         .in('message_id', messageIds);
+
+      await supabase
+        .from('send_queue')
+        .delete()
+        .in('message_id', messageIds);
+
+      await supabase
+        .from('nina_processing_queue')
+        .delete()
+        .in('message_id', messageIds);
     }
 
+    // Clean send_queue and nina_processing_queue by conversation_id too
+    await supabase
+      .from('send_queue')
+      .delete()
+      .eq('conversation_id', conversationId);
+
+    await supabase
+      .from('nina_processing_queue')
+      .delete()
+      .eq('conversation_id', conversationId);
+
+    // Delete all messages
     const { error } = await supabase
       .from('messages')
       .delete()
