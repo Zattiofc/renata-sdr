@@ -2581,9 +2581,20 @@ async function queueTextResponse(
 
   console.log(`[Nina] Sending ${messageChunks.length} text message chunk(s)`);
 
+  // Generate a unique group ID for this set of chunks so the sender
+  // can enforce strict sequential delivery (chunk 0 → 1 → 2 → …)
+  const chunkGroupId = messageChunks.length > 1
+    ? `${message.id}-${Date.now()}`
+    : null;
+
   // Queue each chunk for sending
   for (let i = 0; i < messageChunks.length; i++) {
-    const chunkDelay = delay + (i * 1500);
+    // Only the FIRST chunk gets the initial delay; subsequent chunks have
+    // no scheduled_at — they become eligible only after the previous chunk
+    // is marked 'completed' (enforced by claim_send_queue_batch).
+    const chunkScheduledAt = i === 0
+      ? new Date(Date.now() + delay).toISOString()
+      : new Date(Date.now() + delay + (i * 500)).toISOString(); // small stagger as fallback
     
     const { error: sendQueueError } = await supabase
       .from('send_queue')
@@ -2594,8 +2605,11 @@ async function queueTextResponse(
         from_type: 'nina',
         message_type: 'text',
         priority: 1,
-        scheduled_at: new Date(Date.now() + chunkDelay).toISOString(),
-        instance_id: conversation.instance_id || null,  // Evolution API routing
+        scheduled_at: chunkScheduledAt,
+        instance_id: conversation.instance_id || null,
+        chunk_group_id: chunkGroupId,
+        chunk_index: i,
+        total_chunks: messageChunks.length,
         metadata: {
           response_to_message_id: message.id,
           ai_model: aiSettings.model,
@@ -2611,7 +2625,7 @@ async function queueTextResponse(
     }
   }
 
-  console.log('[Nina] Text response(s) queued for sending');
+  console.log(`[Nina] Text response(s) queued for sending (group: ${chunkGroupId || 'single'})`);
 }
 
 function getDefaultSystemPrompt(): string {

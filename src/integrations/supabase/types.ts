@@ -2002,6 +2002,8 @@ export type Database = {
       }
       send_queue: {
         Row: {
+          chunk_group_id: string | null
+          chunk_index: number | null
           contact_id: string
           content: string | null
           conversation_id: string
@@ -2019,9 +2021,12 @@ export type Database = {
           scheduled_at: string | null
           sent_at: string | null
           status: Database["public"]["Enums"]["queue_status"]
+          total_chunks: number | null
           updated_at: string
         }
         Insert: {
+          chunk_group_id?: string | null
+          chunk_index?: number | null
           contact_id: string
           content?: string | null
           conversation_id: string
@@ -2039,9 +2044,12 @@ export type Database = {
           scheduled_at?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["queue_status"]
+          total_chunks?: number | null
           updated_at?: string
         }
         Update: {
+          chunk_group_id?: string | null
+          chunk_index?: number | null
           contact_id?: string
           content?: string | null
           conversation_id?: string
@@ -2059,6 +2067,7 @@ export type Database = {
           scheduled_at?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["queue_status"]
+          total_chunks?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -2912,6 +2921,8 @@ export type Database = {
       claim_send_queue_batch: {
         Args: { p_limit?: number }
         Returns: {
+          chunk_group_id: string | null
+          chunk_index: number | null
           contact_id: string
           content: string | null
           conversation_id: string
@@ -2929,6 +2940,7 @@ export type Database = {
           scheduled_at: string | null
           sent_at: string | null
           status: Database["public"]["Enums"]["queue_status"]
+          total_chunks: number | null
           updated_at: string
         }[]
         SetofOptions: {
