@@ -1501,6 +1501,7 @@ async function processQueueItem(
     if (content.length < 2 && msg.type === 'text') return false;
     // Filter reaction messages by type too
     if (msg.type === 'reaction') return false;
+    if (msg.from_type !== 'user' && isDeterministicFallbackLoopMessage(content)) return false;
     return true;
   });
 
@@ -2526,12 +2527,20 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
   // Final deterministic fallback (context-aware, never "como posso ajudar")
   if (!aiContent || isGenericContextLossResponse(aiContent)) {
     console.warn('[Nina] Using deterministic contextual fallback response');
-    aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact);
+    aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact, cleanMessages, message?.id);
   }
 
   // ===== SANITIZE + BUSINESS GUARDRAILS =====
   aiContent = sanitizeResponseForClient(aiContent);
   aiContent = enforcePixGuardrail(aiContent, finalPrompt);
+
+  const latestAssistantMessage = getLatestAssistantMessage(cleanMessages, message?.id);
+  if (isRepeatedAssistantReply(aiContent, latestAssistantMessage?.content)) {
+    console.warn('[Nina] Repeated assistant reply detected, rebuilding fallback');
+    aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact, cleanMessages, message?.id);
+    aiContent = sanitizeResponseForClient(aiContent);
+    aiContent = enforcePixGuardrail(aiContent, finalPrompt);
+  }
 
   console.log('[Nina] Final response length:', aiContent.length);
 
@@ -2609,28 +2618,33 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
     const userMsg = (message.content || '').substring(0, 200);
     const aiMsg = (aiContent || '').substring(0, 200);
     const contactName = conversation.contact?.call_name || conversation.contact?.name || '';
+
+    if (isGenericContextLossResponse(aiMsg) || isDeterministicFallbackLoopMessage(aiMsg)) {
+      console.log('[Nina] Skipping resumo_vivo update for low-signal fallback response');
+    } else {
     
-    // Build concise summary entry
-    const now = new Date().toISOString().substring(0, 16);
-    const existingResumo = (conversation.contact?.resumo_vivo || '').trim();
-    
-    // Keep last ~5 interaction summaries to avoid growing too large
-    const existingLines = existingResumo.split('\n').filter((l: string) => l.trim());
-    const maxLines = 10;
-    const recentLines = existingLines.slice(-maxLines);
-    
-    // Add new interaction
-    recentLines.push(`[${now}] Lead: "${userMsg.substring(0, 80)}" → IA: "${aiMsg.substring(0, 80)}"`);
-    
-    // Keep only last maxLines
-    const updatedResumo = recentLines.slice(-maxLines).join('\n');
-    
-    await supabase
-      .from('contacts')
-      .update({ resumo_vivo: updatedResumo })
-      .eq('id', conversation.contact_id);
-    
-    console.log('[Nina] Updated resumo_vivo for contact:', conversation.contact_id);
+      // Build concise summary entry
+      const now = new Date().toISOString().substring(0, 16);
+      const existingResumo = (conversation.contact?.resumo_vivo || '').trim();
+      
+      // Keep last ~5 interaction summaries to avoid growing too large
+      const existingLines = existingResumo.split('\n').filter((l: string) => l.trim());
+      const maxLines = 10;
+      const recentLines = existingLines.slice(-maxLines);
+      
+      // Add new interaction
+      recentLines.push(`[${now}] Lead: "${userMsg.substring(0, 80)}" → IA: "${aiMsg.substring(0, 80)}"`);
+      
+      // Keep only last maxLines
+      const updatedResumo = recentLines.slice(-maxLines).join('\n');
+      
+      await supabase
+        .from('contacts')
+        .update({ resumo_vivo: updatedResumo })
+        .eq('id', conversation.contact_id);
+      
+      console.log('[Nina] Updated resumo_vivo for contact:', conversation.contact_id);
+    }
   } catch (resumoError) {
     console.error('[Nina] Error updating resumo_vivo (non-fatal):', resumoError);
   }
@@ -2774,6 +2788,67 @@ function isGenericContextLossResponse(content: string | null | undefined): boole
   return genericPatterns.some((pattern) => pattern.test(normalized));
 }
 
+function normalizeAssistantText(content: string | null | undefined): string {
+  return (content || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isDeterministicFallbackLoopMessage(content: string | null | undefined): boolean {
+  const normalized = normalizeAssistantText(content);
+  if (!normalized) return false;
+
+  return normalized.includes('retomando de onde paramos') || normalized.includes('retomando nosso último ponto');
+}
+
+function getLatestAssistantMessage(recentMessages: any[], currentMessageId?: string | null) {
+  return recentMessages.find((msg: any) => {
+    const content = (msg.content || '').trim();
+    return msg.id !== currentMessageId && msg.from_type !== 'user' && content.length > 0 && !isDeterministicFallbackLoopMessage(content);
+  }) || null;
+}
+
+function isRepeatedAssistantReply(candidate: string | null | undefined, previous: string | null | undefined): boolean {
+  const normalizedCandidate = normalizeAssistantText(candidate);
+  const normalizedPrevious = normalizeAssistantText(previous);
+
+  if (!normalizedCandidate || !normalizedPrevious) {
+    return false;
+  }
+
+  return normalizedCandidate === normalizedPrevious;
+}
+
+function extractProductFromAssistantPrompt(content: string | null | undefined): string | null {
+  const cleaned = (content || '').trim();
+  if (!cleaned) return null;
+
+  const patterns = [
+    /quantas?\s+porç(?:ão|ões)\s+de\s+([^?.!]+)/i,
+    /levar\s+(?:um|uma|mais um|mais uma)?\s*([^?.!]+?)(?:\s+tamb[eé]m)?\??$/i,
+    /seguir\s+com\s+([^?.!]+)\??$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const product = cleaned.match(pattern)?.[1]?.replace(/\s+tamb[eé]m$/i, '').trim();
+    if (product) return product;
+  }
+
+  return null;
+}
+
+function extractQuantityFromShortAnswer(content: string | null | undefined): number | null {
+  const normalized = normalizeAssistantText(content);
+  if (!normalized) return null;
+
+  const numericMatch = normalized.match(/\b(\d+)\b/);
+  if (numericMatch) return Number(numericMatch[1]);
+
+  if (/\b(um|uma|1 só|1 so|só 1|so 1|apenas 1)\b/.test(normalized)) return 1;
+  if (/\b(dois|duas)\b/.test(normalized)) return 2;
+  if (/\b(tr[eê]s)\b/.test(normalized)) return 3;
+
+  return null;
+}
+
 function buildToolExecutionSummary(
   toolCalls: any[],
   appointmentCreated: any,
@@ -2854,20 +2929,49 @@ async function generateContextRecoveryResponse(
   }
 }
 
-function buildDeterministicContextFallback(lastUserContent: string | null | undefined, contact: any): string {
+function buildDeterministicContextFallback(
+  lastUserContent: string | null | undefined,
+  contact: any,
+  recentMessages: any[] = [],
+  currentMessageId?: string | null,
+): string {
   const preferredName = (contact?.call_name || contact?.name || '').trim().split(/\s+/)[0] || '';
   const greetingName = preferredName ? `, ${preferredName}` : '';
   const cleaned = (lastUserContent || '').trim();
+  const normalized = normalizeAssistantText(cleaned);
+  const lastAssistantContent = (getLatestAssistantMessage(recentMessages, currentMessageId)?.content || '').trim();
+  const referencedProduct = extractProductFromAssistantPrompt(lastAssistantContent);
+  const shortAnswerQuantity = extractQuantityFromShortAnswer(cleaned);
 
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) {
     return `Perfeito${greetingName}! Recebi seu e-mail. Para seguir sem erro no agendamento, me confirma um novo horário que funcione para você?`;
   }
 
-  if (cleaned === '?' || cleaned.length <= 2) {
-    return `Retomando nosso último ponto${greetingName}: me diz um novo horário que funcione para você e eu já sigo com o agendamento.`;
+  if (/quero fazer um novo pedido|novo pedido/.test(normalized)) {
+    return `Perfeito${greetingName}. Me diz quais itens você quer neste novo pedido e a quantidade de cada um para eu montar certinho.`;
   }
 
-  return `Perfeito${greetingName}. Retomando de onde paramos, me confirma o próximo passo que você prefere e eu sigo com você.`;
+  if (/\b(meu pedido|o pedido)\b/.test(normalized)) {
+    return `Claro${greetingName}. Você quer que eu te recapitule o pedido atual ou prefere montar um novo?`;
+  }
+
+  if (referencedProduct && shortAnswerQuantity !== null) {
+    return `Perfeito${greetingName}. Então fica ${shortAnswerQuantity}x ${referencedProduct}. Quer fechar assim ou incluir mais algum item?`;
+  }
+
+  if (referencedProduct && /\b(pode ser|isso|fechado|ok|sim)\b/.test(normalized)) {
+    return `Perfeito${greetingName}. Então seguimos com ${referencedProduct}. Quer que eu já deixe o pedido montado?`;
+  }
+
+  if (/pix|comprovante|pagamento/.test(normalized)) {
+    return `Perfeito${greetingName}. Assim que você me enviar o comprovante eu valido e sigo com o pedido.`;
+  }
+
+  if (cleaned === '?' || cleaned.length <= 2) {
+    return `Sem problema${greetingName}. Me diz só o item ou o ajuste que você quer no pedido que eu sigo daqui sem erro.`;
+  }
+
+  return `Perfeito${greetingName}. Me diz qual item você quer ou o que precisa ajustar no pedido que eu continuo daqui certinho.`;
 }
 
 function buildRagThresholds(baseThreshold: number): number[] {
