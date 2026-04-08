@@ -325,7 +325,7 @@ IMPORTANTE: A mensagem deve ser CURTA (máx 2 linhas), natural, como se fosse Wh
             content: decision.message,
             type: 'text',
             from_type: 'nina',
-            status: 'pending',
+            status: 'sent',
             metadata: { 
               source: 'smart_followup',
               followup_type: decision.followup_type,
