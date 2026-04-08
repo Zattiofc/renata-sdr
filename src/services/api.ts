@@ -1681,6 +1681,33 @@ export const api = {
       console.error('[API] Error clearing chat:', error);
       throw error;
     }
+
+    // Reset persistent memory (resumo_vivo + client_memory) to avoid stale context
+    try {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('contact_id')
+        .eq('id', conversationId)
+        .single();
+
+      if (conv?.contact_id) {
+        await supabase
+          .from('contacts')
+          .update({ resumo_vivo: null, client_memory: null })
+          .eq('id', conv.contact_id);
+
+        // Also clear memory_events for this contact/conversation
+        await supabase
+          .from('memory_events')
+          .delete()
+          .eq('contact_id', conv.contact_id)
+          .eq('conversation_id', conversationId);
+
+        console.log('[API] Cleared persistent memory for contact:', conv.contact_id);
+      }
+    } catch (memErr) {
+      console.warn('[API] Non-fatal: failed to clear persistent memory:', memErr);
+    }
   },
 
   /**
