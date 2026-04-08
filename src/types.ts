@@ -324,12 +324,29 @@ export function transformDBToUIConversation(
   conv: DBConversation,
   messages: DBMessage[]
 ): UIConversation {
-  const sortedMessages = [...messages].sort(
+  // Collect all message IDs that are part of a group (sub-messages)
+  const groupedSubMessageIds = new Set<string>();
+  messages.forEach(msg => {
+    const grouped = msg.metadata?.grouped_messages as string[] | undefined;
+    if (grouped && Array.isArray(grouped)) {
+      grouped.forEach(id => {
+        // Don't exclude the message itself (the last/combined one)
+        if (id !== msg.id) {
+          groupedSubMessageIds.add(id);
+        }
+      });
+    }
+  });
+
+  // Filter out sub-messages that were merged into a grouped message
+  const filteredMessages = messages.filter(m => !groupedSubMessageIds.has(m.id));
+
+  const sortedMessages = [...filteredMessages].sort(
     (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
   );
 
   const lastMsg = sortedMessages[sortedMessages.length - 1];
-  const unreadCount = messages.filter(
+  const unreadCount = filteredMessages.filter(
     m => m.from_type === 'user' && m.status !== 'read'
   ).length;
 
