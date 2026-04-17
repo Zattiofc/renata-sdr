@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  debug?: any;
 }
 
 interface PromptTestModalProps {
@@ -32,6 +33,9 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [contactName, setContactName] = useState('Lucas');
+  const [contactPhone, setContactPhone] = useState('5511999999999');
+  const [lastDebug, setLastDebug] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -52,6 +56,7 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
   const handleClear = () => {
     setMessages([]);
     setInput('');
+    setLastDebug(null);
   };
 
   const handleSend = async () => {
@@ -69,7 +74,7 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
       const apiMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
 
       const { data, error } = await supabase.functions.invoke('test-prompt-chat', {
-        body: { messages: apiMessages, systemPrompt },
+        body: { messages: apiMessages, systemPrompt, contactName, contactPhone },
       });
 
       if (error) throw error;
@@ -80,6 +85,7 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
         return;
       }
 
+      if (data?.debug) setLastDebug(data.debug);
       const responseText: string = data?.response || '';
       const parts = Array.isArray(data?.chunks) && data.chunks.length > 0
         ? data.chunks.filter((p: string) => p.trim())
