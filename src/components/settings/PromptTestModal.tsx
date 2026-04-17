@@ -118,14 +118,19 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-2xl h-[680px] flex flex-col p-0 gap-0">
         {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-border flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-lg">Testar Prompt</DialogTitle>
+        <DialogHeader className="px-6 py-3 border-b border-border flex-shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <DialogTitle className="text-lg flex items-center gap-2">
+                Simulação Real
+                <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  RAG + Estoque + Tools
+                </span>
+              </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Simule uma conversa com o agente usando o prompt atual
+                Conversa com o agente real (busca na base + consulta de estoque). Vendas em modo dry-run.
               </DialogDescription>
             </div>
             <Button
@@ -138,6 +143,35 @@ const PromptTestModal: React.FC<PromptTestModalProps> = ({ open, onOpenChange, s
               Limpar
             </Button>
           </div>
+          <div className="flex gap-2 pt-3">
+            <input
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Nome do cliente"
+              className="flex-1 h-8 rounded-md border border-border bg-secondary/50 px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+            <input
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              placeholder="Telefone (5511...)"
+              className="flex-1 h-8 rounded-md border border-border bg-secondary/50 px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+          </div>
+          {lastDebug && (
+            <div className="flex flex-wrap gap-1.5 pt-2 text-[10px]">
+              <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                RAG: {lastDebug.ragMode} ({lastDebug.ragChunks})
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                Estoque: {lastDebug.inventoryItemsAvailable} itens
+              </span>
+              {lastDebug.toolCalls?.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  Tools: {lastDebug.toolCalls.map((t: any) => t.tool).join(', ')}
+                </span>
+              )}
+            </div>
+          )}
         </DialogHeader>
 
         {/* Messages area */}
