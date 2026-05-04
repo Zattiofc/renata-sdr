@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BookOpen, Upload, Trash2, Loader2, FileText, Plus, AlertCircle, CheckCircle2, FileSpreadsheet, FileType } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Loader2, FileText, Plus, AlertCircle, CheckCircle2, FileSpreadsheet, FileType, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
