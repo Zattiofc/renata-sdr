@@ -50,7 +50,7 @@ async function getStaleSendReason(supabase: any, queueItem: any): Promise<string
 
   const { data: newerUserMessage } = await supabase
     .from('messages')
-    .select('id')
+    .select('id, sent_at')
     .eq('conversation_id', queueItem.conversation_id)
     .eq('from_type', 'user')
     .gt('sent_at', sourceMessage.sent_at)
@@ -59,6 +59,14 @@ async function getStaleSendReason(supabase: any, queueItem: any): Promise<string
     .maybeSingle();
 
   if (!newerUserMessage) {
+    return null;
+  }
+
+  // Debounce-safe: if the AI response was queued AFTER the "newer" user message,
+  // the debounce/aggregation already included it — not actually stale.
+  const queueCreatedMs = new Date(queueItem.created_at).getTime();
+  const newerUserMs = new Date(newerUserMessage.sent_at).getTime();
+  if (Number.isFinite(queueCreatedMs) && Number.isFinite(newerUserMs) && queueCreatedMs >= newerUserMs) {
     return null;
   }
 
