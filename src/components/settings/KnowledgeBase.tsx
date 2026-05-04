@@ -309,7 +309,49 @@ const KnowledgeBase: React.FC = () => {
     }
   };
 
-  const getFileIcon = (fileType: string) => {
+  const downloadFile = async (file: KnowledgeFile) => {
+    try {
+      const storagePath = (file as any).storage_path;
+      if (storagePath) {
+        const { data, error } = await supabase.storage
+          .from('knowledge-docs')
+          .download(storagePath);
+        if (error) throw error;
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.file_name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // Manual/text files: reconstruct from chunks
+        const { data: chunks, error } = await supabase
+          .from('knowledge_chunks' as any)
+          .select('content, chunk_index')
+          .eq('file_id', file.id)
+          .order('chunk_index', { ascending: true });
+        if (error) throw error;
+        const content = ((chunks || []) as any[]).map(c => c.content).join('\n\n');
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = file.file_type === 'manual' ? 'txt' : file.file_type;
+        a.download = `${file.file_name.replace(/\.[^.]+$/, '')}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      toast.success('Download iniciado');
+    } catch (error: any) {
+      console.error('Error downloading file:', error);
+      toast.error('Erro ao baixar: ' + error.message);
+    }
+  };
+
     switch (fileType) {
       case 'pdf':
         return <FileType className="w-4 h-4 text-red-500 flex-shrink-0" />;
