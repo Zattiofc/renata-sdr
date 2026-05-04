@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BookOpen, Upload, Trash2, Loader2, FileText, Plus, AlertCircle, CheckCircle2, FileSpreadsheet, FileType } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Loader2, FileText, Plus, AlertCircle, CheckCircle2, FileSpreadsheet, FileType, Download } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -309,6 +309,49 @@ const KnowledgeBase: React.FC = () => {
     }
   };
 
+  const downloadFile = async (file: KnowledgeFile) => {
+    try {
+      const storagePath = (file as any).storage_path;
+      if (storagePath) {
+        const { data, error } = await supabase.storage
+          .from('knowledge-docs')
+          .download(storagePath);
+        if (error) throw error;
+        const url = URL.createObjectURL(data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.file_name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // Manual/text files: reconstruct from chunks
+        const { data: chunks, error } = await supabase
+          .from('knowledge_chunks' as any)
+          .select('content, chunk_index')
+          .eq('file_id', file.id)
+          .order('chunk_index', { ascending: true });
+        if (error) throw error;
+        const content = ((chunks || []) as any[]).map(c => c.content).join('\n\n');
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = file.file_type === 'manual' ? 'txt' : file.file_type;
+        a.download = `${file.file_name.replace(/\.[^.]+$/, '')}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      toast.success('Download iniciado');
+    } catch (error: any) {
+      console.error('Error downloading file:', error);
+      toast.error('Erro ao baixar: ' + error.message);
+    }
+  };
+
   const getFileIcon = (fileType: string) => {
     switch (fileType) {
       case 'pdf':
@@ -488,12 +531,22 @@ const KnowledgeBase: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => deleteFile(file.id)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => downloadFile(file)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                  title="Baixar documento"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => deleteFile(file.id)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  title="Remover documento"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
