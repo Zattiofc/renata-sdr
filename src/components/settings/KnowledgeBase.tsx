@@ -531,12 +531,22 @@ const KnowledgeBase: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => deleteFile(file.id)}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => downloadFile(file)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                  title="Baixar documento"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => deleteFile(file.id)}
+                  className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                  title="Remover documento"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
