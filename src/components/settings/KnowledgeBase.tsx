@@ -352,6 +352,7 @@ const KnowledgeBase: React.FC = () => {
     }
   };
 
+  const getFileIcon = (fileType: string) => {
     switch (fileType) {
       case 'pdf':
         return <FileType className="w-4 h-4 text-red-500 flex-shrink-0" />;
