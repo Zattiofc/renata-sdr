@@ -6,6 +6,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Cadência adaptativa de agrupamento de mensagens
+async function computeGroupingDelay(supabase: any, conversationId: string, excludeMessageId?: string): Promise<number> {
+  const { data: settings } = await supabase
+    .from('nina_settings')
+    .select('grouping_delay_first_ms, grouping_delay_active_ms, grouping_delay_after_ai_ms')
+    .limit(1)
+    .maybeSingle();
+
+  const first = settings?.grouping_delay_first_ms ?? 2000;
+  const active = settings?.grouping_delay_active_ms ?? 8000;
+  const afterAi = settings?.grouping_delay_after_ai_ms ?? 10000;
+
+  let query = supabase
+    .from('messages')
+    .select('id, from_type, sent_at')
+    .eq('conversation_id', conversationId)
+    .order('sent_at', { ascending: false })
+    .limit(1);
+  if (excludeMessageId) query = query.neq('id', excludeMessageId);
+
+  const { data: lastMsg } = await query.maybeSingle();
+
+  if (!lastMsg) return first;
+  const ageMs = Date.now() - new Date(lastMsg.sent_at).getTime();
+  if (lastMsg.from_type !== 'user' && ageMs < 30000) return afterAi;
+  if (ageMs > 120000) return first;
+  return active;
+}
+
 interface EvolutionWebhookPayload {
   event: string;
   instance: string;
@@ -314,9 +343,10 @@ async function processMessageUpsert(
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id);
 
-  // Calcular o novo process_after para agrupamento
-  const GROUPING_DELAY_MS = 5000; // 5 segundos - janela para agrupar múltiplas mensagens
-  const processAfter = new Date(Date.now() + GROUPING_DELAY_MS).toISOString();
+  // Cadência adaptativa: lê delays de nina_settings e decide com base no contexto da conversa
+  const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id, message.id);
+  const processAfter = new Date(Date.now() + groupingDelayMs).toISOString();
+  console.log(`[evolution-webhook] Adaptive grouping delay: ${groupingDelayMs}ms`);
 
   // CORREÇÃO: Atualizar process_after de mensagens pendentes do mesmo telefone
   // Isso garante que todas as mensagens da mesma "rajada" sejam processadas juntas

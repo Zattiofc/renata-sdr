@@ -1612,6 +1612,9 @@ export type Database = {
           elevenlabs_voice_id: string
           evolution_api_key: string | null
           evolution_api_url: string | null
+          grouping_delay_active_ms: number
+          grouping_delay_after_ai_ms: number
+          grouping_delay_first_ms: number
           id: string
           is_24_7: boolean
           is_active: boolean
@@ -1656,6 +1659,9 @@ export type Database = {
           elevenlabs_voice_id?: string
           evolution_api_key?: string | null
           evolution_api_url?: string | null
+          grouping_delay_active_ms?: number
+          grouping_delay_after_ai_ms?: number
+          grouping_delay_first_ms?: number
           id?: string
           is_24_7?: boolean
           is_active?: boolean
@@ -1700,6 +1706,9 @@ export type Database = {
           elevenlabs_voice_id?: string
           evolution_api_key?: string | null
           evolution_api_url?: string | null
+          grouping_delay_active_ms?: number
+          grouping_delay_after_ai_ms?: number
+          grouping_delay_first_ms?: number
           id?: string
           is_24_7?: boolean
           is_active?: boolean

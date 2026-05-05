@@ -32,6 +32,9 @@ interface AgentSettings {
   sdr_name: string | null;
   ai_scheduling_enabled: boolean;
   is_24_7: boolean;
+  grouping_delay_first_ms: number;
+  grouping_delay_active_ms: number;
+  grouping_delay_after_ai_ms: number;
 }
 
 const AI_PROVIDERS = [
@@ -126,6 +129,9 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
     sdr_name: null,
     ai_scheduling_enabled: true,
     is_24_7: false,
+    grouping_delay_first_ms: 2000,
+    grouping_delay_active_ms: 8000,
+    grouping_delay_after_ai_ms: 10000,
   });
 
   useImperativeHandle(ref, () => ({
@@ -185,6 +191,9 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
         ai_scheduling_enabled: data.ai_scheduling_enabled ?? true,
         auto_response_enabled: data.auto_response_enabled,
         is_24_7: (data as any).is_24_7 ?? false,
+        grouping_delay_first_ms: (data as any).grouping_delay_first_ms ?? 2000,
+        grouping_delay_active_ms: (data as any).grouping_delay_active_ms ?? 8000,
+        grouping_delay_after_ai_ms: (data as any).grouping_delay_after_ai_ms ?? 10000,
       });
     } catch (error) {
       console.error('[AgentSettings] Error loading settings:', error);
@@ -223,6 +232,9 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
           sdr_name: settings.sdr_name,
           ai_scheduling_enabled: settings.ai_scheduling_enabled,
           is_24_7: settings.is_24_7,
+          grouping_delay_first_ms: settings.grouping_delay_first_ms,
+          grouping_delay_active_ms: settings.grouping_delay_active_ms,
+          grouping_delay_after_ai_ms: settings.grouping_delay_after_ai_ms,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', settings.id!);
@@ -629,6 +641,53 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
               </label>
             </div>
           </div>
+        </div>
+
+        {/* Cadência de Resposta */}
+        <div className="bg-card border border-border rounded-lg p-5 space-y-4">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Cadência de Resposta</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Tempo que o agente espera antes de responder. Quanto maior, mais chance de juntar várias mensagens do cliente em uma única resposta.
+            </p>
+          </div>
+
+          {[
+            {
+              key: 'grouping_delay_first_ms' as const,
+              label: 'Primeira mensagem',
+              desc: 'Quando o cliente abre uma nova conversa (ex: "bom dia"). Mantenha baixo para resposta rápida.',
+            },
+            {
+              key: 'grouping_delay_active_ms' as const,
+              label: 'Durante a conversa',
+              desc: 'Quando o cliente já está respondendo. Aumente se ele costuma mandar várias mensagens seguidas.',
+            },
+            {
+              key: 'grouping_delay_after_ai_ms' as const,
+              label: 'Após resposta da IA',
+              desc: 'Janela maior depois que a IA acabou de responder, para esperar follow-ups do cliente.',
+            },
+          ].map((field) => (
+            <div key={field.key} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-foreground">{field.label}</label>
+                <span className="text-sm font-mono text-primary">
+                  {(settings[field.key] / 1000).toFixed(1)}s
+                </span>
+              </div>
+              <input
+                type="range"
+                min={1000}
+                max={20000}
+                step={500}
+                value={settings[field.key]}
+                onChange={(e) => setSettings({ ...settings, [field.key]: parseInt(e.target.value) })}
+                className="w-full accent-primary"
+              />
+              <p className="text-xs text-muted-foreground">{field.desc}</p>
+            </div>
+          ))}
         </div>
 
         {/* Knowledge Base */}

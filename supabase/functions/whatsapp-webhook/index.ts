@@ -10,7 +10,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const GROUPING_DELAY_MS = 5000; // 5 seconds - window to group multiple messages
+// Cadência adaptativa de agrupamento
+async function computeGroupingDelay(supabase: any, conversationId: string, excludeMessageId?: string): Promise<number> {
+  const { data: settings } = await supabase
+    .from('nina_settings')
+    .select('grouping_delay_first_ms, grouping_delay_active_ms, grouping_delay_after_ai_ms')
+    .limit(1)
+    .maybeSingle();
+
+  const first = settings?.grouping_delay_first_ms ?? 2000;
+  const active = settings?.grouping_delay_active_ms ?? 8000;
+  const afterAi = settings?.grouping_delay_after_ai_ms ?? 10000;
+
+  let query = supabase
+    .from('messages')
+    .select('from_type, sent_at')
+    .eq('conversation_id', conversationId)
+    .order('sent_at', { ascending: false })
+    .limit(1);
+  if (excludeMessageId) query = query.neq('id', excludeMessageId);
+
+  const { data: lastMsg } = await query.maybeSingle();
+
+  if (!lastMsg) return first;
+  const ageMs = Date.now() - new Date(lastMsg.sent_at).getTime();
+  if (lastMsg.from_type !== 'user' && ageMs < 30000) return afterAi;
+  if (ageMs > 120000) return first;
+  return active;
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -137,8 +164,6 @@ serve(async (req) => {
 
       // Process incoming messages - CREATE RECORDS IMMEDIATELY
       if (messages && messages.length > 0) {
-        const processAfter = new Date(Date.now() + GROUPING_DELAY_MS).toISOString();
-
         for (const message of messages) {
           const contactInfo = contacts?.find((c: any) => c.wa_id === message.from);
           const phoneNumber = message.from;
@@ -287,6 +312,11 @@ serve(async (req) => {
             .from('conversations')
             .update({ last_message_at: new Date().toISOString() })
             .eq('id', conversation.id);
+
+          // 5b. Compute adaptive grouping delay per-conversation (excluding just-inserted msg)
+          const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id, dbMessage.id);
+          const processAfter = new Date(Date.now() + groupingDelayMs).toISOString();
+          console.log(`[Webhook] Adaptive grouping delay: ${groupingDelayMs}ms for ${phoneNumber}`);
 
           // 6. FIRST reset timer for all pending messages from same phone, THEN insert new queue entry
           await supabase
