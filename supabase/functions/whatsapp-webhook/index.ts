@@ -10,7 +10,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const GROUPING_DELAY_MS = 5000; // 5 seconds - window to group multiple messages
+// Cadência adaptativa de agrupamento
+async function computeGroupingDelay(supabase: any, conversationId: string): Promise<number> {
+  const { data: settings } = await supabase
+    .from('nina_settings')
+    .select('grouping_delay_first_ms, grouping_delay_active_ms, grouping_delay_after_ai_ms')
+    .limit(1)
+    .maybeSingle();
+
+  const first = settings?.grouping_delay_first_ms ?? 2000;
+  const active = settings?.grouping_delay_active_ms ?? 8000;
+  const afterAi = settings?.grouping_delay_after_ai_ms ?? 10000;
+
+  const { data: lastMsg } = await supabase
+    .from('messages')
+    .select('from_type, sent_at')
+    .eq('conversation_id', conversationId)
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!lastMsg) return first;
+  const ageMs = Date.now() - new Date(lastMsg.sent_at).getTime();
+  if (lastMsg.from_type !== 'user' && ageMs < 30000) return afterAi;
+  if (ageMs > 120000) return first;
+  return active;
+}
 
 serve(async (req) => {
   // Handle CORS preflight
