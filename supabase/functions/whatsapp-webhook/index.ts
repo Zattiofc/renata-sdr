@@ -162,8 +162,6 @@ serve(async (req) => {
 
       // Process incoming messages - CREATE RECORDS IMMEDIATELY
       if (messages && messages.length > 0) {
-        const processAfter = new Date(Date.now() + GROUPING_DELAY_MS).toISOString();
-
         for (const message of messages) {
           const contactInfo = contacts?.find((c: any) => c.wa_id === message.from);
           const phoneNumber = message.from;
