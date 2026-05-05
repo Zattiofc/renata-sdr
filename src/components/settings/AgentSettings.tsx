@@ -129,6 +129,9 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
     sdr_name: null,
     ai_scheduling_enabled: true,
     is_24_7: false,
+    grouping_delay_first_ms: 2000,
+    grouping_delay_active_ms: 8000,
+    grouping_delay_after_ai_ms: 10000,
   });
 
   useImperativeHandle(ref, () => ({
