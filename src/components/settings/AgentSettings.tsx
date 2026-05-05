@@ -7,6 +7,8 @@ import PromptGeneratorSheet from './PromptGeneratorSheet';
 import PromptTestModal from './PromptTestModal';
 import KnowledgeBase from './KnowledgeBase';
 import { DEFAULT_NINA_PROMPT } from '@/prompts/default-nina-prompt';
+import { DEFAULT_SALES_SCRIPT } from '@/prompts/default-sales-script';
+import { ScrollText } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Tooltip,
