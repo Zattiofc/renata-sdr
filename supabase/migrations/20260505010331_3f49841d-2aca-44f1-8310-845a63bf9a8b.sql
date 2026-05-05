@@ -1,0 +1,1 @@
+ALTER TABLE public.nina_settings ADD COLUMN IF NOT EXISTS sales_script_addon TEXT DEFAULT '';
