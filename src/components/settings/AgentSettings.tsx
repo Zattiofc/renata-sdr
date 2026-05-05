@@ -368,7 +368,53 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
           </details>
         </div>
 
-        {/* 2-Column Grid: Company Info + Business Hours */}
+        {/* Sales Script — injected in 100% of conversations */}
+        <div className="rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <ScrollText className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-foreground">Script de Vendas</h3>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                Sempre injetado
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSettings({ ...settings, sales_script_addon: DEFAULT_SALES_SCRIPT })}
+              className="text-muted-foreground hover:text-foreground hover:bg-secondary"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Restaurar Padrão
+            </Button>
+          </div>
+
+          <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-foreground">
+            <p className="flex items-start gap-2">
+              <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />
+              <span>
+                <strong>Roteiro obrigatório:</strong> este conteúdo é injetado em <strong>todas as conversas</strong> como playbook de vendas com prioridade. 
+                Use para definir o passo-a-passo do atendimento (saudação, oferta, fechamento, PIX). 
+                Diferente da Base de Conhecimento, este texto chega 100% completo a cada mensagem — o agente não pula etapas.
+              </span>
+            </p>
+          </div>
+
+          <textarea
+            value={settings.sales_script_addon || ''}
+            onChange={(e) => setSettings({ ...settings, sales_script_addon: e.target.value })}
+            placeholder="Ex: 1. Saudação...&#10;2. Apresentar produtos...&#10;3. Pedir quantidade..."
+            rows={14}
+            className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono custom-scrollbar"
+          />
+          {!settings.sales_script_addon && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              💡 Vazio = nenhum roteiro extra. Clique em "Restaurar Padrão" para carregar o script da Família Navares.
+            </p>
+          )}
+        </div>
+
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Company Info */}
           <div className="rounded-xl border border-border bg-card p-6">
