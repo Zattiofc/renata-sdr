@@ -133,6 +133,7 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
     grouping_delay_first_ms: 2000,
     grouping_delay_active_ms: 8000,
     grouping_delay_after_ai_ms: 10000,
+    sales_script_addon: '',
   });
 
   useImperativeHandle(ref, () => ({
