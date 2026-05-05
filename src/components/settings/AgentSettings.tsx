@@ -191,6 +191,9 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
         ai_scheduling_enabled: data.ai_scheduling_enabled ?? true,
         auto_response_enabled: data.auto_response_enabled,
         is_24_7: (data as any).is_24_7 ?? false,
+        grouping_delay_first_ms: (data as any).grouping_delay_first_ms ?? 2000,
+        grouping_delay_active_ms: (data as any).grouping_delay_active_ms ?? 8000,
+        grouping_delay_after_ai_ms: (data as any).grouping_delay_after_ai_ms ?? 10000,
       });
     } catch (error) {
       console.error('[AgentSettings] Error loading settings:', error);
