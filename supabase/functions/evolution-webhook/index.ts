@@ -6,7 +6,37 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-interface EvolutionWebhookPayload {
+// Cadência adaptativa de agrupamento de mensagens
+async function computeGroupingDelay(supabase: any, conversationId: string): Promise<number> {
+  const { data: settings } = await supabase
+    .from('nina_settings')
+    .select('grouping_delay_first_ms, grouping_delay_active_ms, grouping_delay_after_ai_ms')
+    .limit(1)
+    .maybeSingle();
+
+  const first = settings?.grouping_delay_first_ms ?? 2000;
+  const active = settings?.grouping_delay_active_ms ?? 8000;
+  const afterAi = settings?.grouping_delay_after_ai_ms ?? 10000;
+
+  const { data: lastMsg } = await supabase
+    .from('messages')
+    .select('from_type, sent_at')
+    .eq('conversation_id', conversationId)
+    .order('sent_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!lastMsg) return first;
+  const ageMs = Date.now() - new Date(lastMsg.sent_at).getTime();
+
+  // IA acabou de responder (< 30s) → janela maior, cliente provavelmente vai mandar mais
+  if (lastMsg.from_type !== 'user' && ageMs < 30000) return afterAi;
+  // Última mensagem do cliente foi há mais de 2 minutos → trata como nova conversa
+  if (ageMs > 120000) return first;
+  // Conversa ativa
+  return active;
+}
+
   event: string;
   instance: string;
   data: any;
