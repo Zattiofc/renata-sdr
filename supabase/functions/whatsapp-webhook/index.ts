@@ -311,6 +311,11 @@ serve(async (req) => {
             .update({ last_message_at: new Date().toISOString() })
             .eq('id', conversation.id);
 
+          // 5b. Compute adaptive grouping delay per-conversation
+          const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id);
+          const processAfter = new Date(Date.now() + groupingDelayMs).toISOString();
+          console.log(`[Webhook] Adaptive grouping delay: ${groupingDelayMs}ms for ${phoneNumber}`);
+
           // 6. FIRST reset timer for all pending messages from same phone, THEN insert new queue entry
           await supabase
             .from('message_grouping_queue')
