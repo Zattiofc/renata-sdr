@@ -238,6 +238,7 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
           grouping_delay_first_ms: settings.grouping_delay_first_ms,
           grouping_delay_active_ms: settings.grouping_delay_active_ms,
           grouping_delay_after_ai_ms: settings.grouping_delay_after_ai_ms,
+          sales_script_addon: settings.sales_script_addon,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', settings.id!);
