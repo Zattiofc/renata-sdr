@@ -483,7 +483,18 @@ serve(async (req) => {
         }
 
         // Use default prompt if not configured
-        const systemPrompt = effectiveSettings.system_prompt_override || getDefaultSystemPrompt();
+        let systemPrompt = effectiveSettings.system_prompt_override || getDefaultSystemPrompt();
+
+        // === SALES SCRIPT ADDON: injected in 100% of conversations as MANDATORY playbook ===
+        const salesScriptAddon = (effectiveSettings as any).sales_script_addon;
+        if (salesScriptAddon && typeof salesScriptAddon === 'string' && salesScriptAddon.trim().length > 0) {
+          systemPrompt += `\n\n<sales_playbook>
+ROTEIRO DE VENDAS OBRIGATÓRIO — siga os passos NA ORDEM. Não pule etapas. Não ofereça produtos/serviços que não estejam descritos aqui. Este roteiro tem prioridade sobre qualquer informação contraditória do contexto.
+
+${salesScriptAddon.trim()}
+</sales_playbook>`;
+          console.log('[Nina] ✅ Sales script addon injected into prompt');
+        }
         
         console.log('[Nina] Processing with settings:', {
           is_active: effectiveSettings.is_active,
