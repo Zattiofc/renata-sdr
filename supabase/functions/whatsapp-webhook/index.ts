@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 // Cadência adaptativa de agrupamento
-async function computeGroupingDelay(supabase: any, conversationId: string): Promise<number> {
+async function computeGroupingDelay(supabase: any, conversationId: string, excludeMessageId?: string): Promise<number> {
   const { data: settings } = await supabase
     .from('nina_settings')
     .select('grouping_delay_first_ms, grouping_delay_active_ms, grouping_delay_after_ai_ms')
@@ -22,13 +22,15 @@ async function computeGroupingDelay(supabase: any, conversationId: string): Prom
   const active = settings?.grouping_delay_active_ms ?? 8000;
   const afterAi = settings?.grouping_delay_after_ai_ms ?? 10000;
 
-  const { data: lastMsg } = await supabase
+  let query = supabase
     .from('messages')
     .select('from_type, sent_at')
     .eq('conversation_id', conversationId)
     .order('sent_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  if (excludeMessageId) query = query.neq('id', excludeMessageId);
+
+  const { data: lastMsg } = await query.maybeSingle();
 
   if (!lastMsg) return first;
   const ageMs = Date.now() - new Date(lastMsg.sent_at).getTime();
