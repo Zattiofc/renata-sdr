@@ -35,6 +35,7 @@ interface AgentSettings {
   grouping_delay_first_ms: number;
   grouping_delay_active_ms: number;
   grouping_delay_after_ai_ms: number;
+  sales_script_addon: string;
 }
 
 const AI_PROVIDERS = [
