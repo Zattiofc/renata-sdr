@@ -232,6 +232,9 @@ const AgentSettings = forwardRef<AgentSettingsRef, {}>((props, ref) => {
           sdr_name: settings.sdr_name,
           ai_scheduling_enabled: settings.ai_scheduling_enabled,
           is_24_7: settings.is_24_7,
+          grouping_delay_first_ms: settings.grouping_delay_first_ms,
+          grouping_delay_active_ms: settings.grouping_delay_active_ms,
+          grouping_delay_after_ai_ms: settings.grouping_delay_after_ai_ms,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', settings.id!);
