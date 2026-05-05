@@ -37,6 +37,7 @@ async function computeGroupingDelay(supabase: any, conversationId: string): Prom
   return active;
 }
 
+interface EvolutionWebhookPayload {
   event: string;
   instance: string;
   data: any;
