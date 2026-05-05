@@ -314,9 +314,10 @@ async function processMessageUpsert(
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversation.id);
 
-  // Calcular o novo process_after para agrupamento
-  const GROUPING_DELAY_MS = 5000; // 5 segundos - janela para agrupar múltiplas mensagens
-  const processAfter = new Date(Date.now() + GROUPING_DELAY_MS).toISOString();
+  // Cadência adaptativa: lê delays de nina_settings e decide com base no contexto da conversa
+  const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id);
+  const processAfter = new Date(Date.now() + groupingDelayMs).toISOString();
+  console.log(`[evolution-webhook] Adaptive grouping delay: ${groupingDelayMs}ms`);
 
   // CORREÇÃO: Atualizar process_after de mensagens pendentes do mesmo telefone
   // Isso garante que todas as mensagens da mesma "rajada" sejam processadas juntas
