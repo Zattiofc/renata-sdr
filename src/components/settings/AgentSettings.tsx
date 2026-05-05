@@ -32,6 +32,9 @@ interface AgentSettings {
   sdr_name: string | null;
   ai_scheduling_enabled: boolean;
   is_24_7: boolean;
+  grouping_delay_first_ms: number;
+  grouping_delay_active_ms: number;
+  grouping_delay_after_ai_ms: number;
 }
 
 const AI_PROVIDERS = [
