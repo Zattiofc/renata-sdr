@@ -344,7 +344,7 @@ async function processMessageUpsert(
     .eq('id', conversation.id);
 
   // Cadência adaptativa: lê delays de nina_settings e decide com base no contexto da conversa
-  const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id);
+  const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id, message.id);
   const processAfter = new Date(Date.now() + groupingDelayMs).toISOString();
   console.log(`[evolution-webhook] Adaptive grouping delay: ${groupingDelayMs}ms`);
 
