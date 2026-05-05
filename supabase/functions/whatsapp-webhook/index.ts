@@ -313,8 +313,8 @@ serve(async (req) => {
             .update({ last_message_at: new Date().toISOString() })
             .eq('id', conversation.id);
 
-          // 5b. Compute adaptive grouping delay per-conversation
-          const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id);
+          // 5b. Compute adaptive grouping delay per-conversation (excluding just-inserted msg)
+          const groupingDelayMs = await computeGroupingDelay(supabase, conversation.id, dbMessage.id);
           const processAfter = new Date(Date.now() + groupingDelayMs).toISOString();
           console.log(`[Webhook] Adaptive grouping delay: ${groupingDelayMs}ms for ${phoneNumber}`);
 
