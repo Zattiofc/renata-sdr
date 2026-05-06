@@ -1,38 +1,36 @@
+# Corrigir: agente desligado mas enviando follow-up sozinho
 
+## Diagnóstico
 
-## Plano: Recuperar Service Role Key + Corrigir Build Errors
+O orquestrador principal (`nina-orchestrator`) respeita corretamente os toggles `is_active` e `auto_response_enabled` em `nina_settings` — quando você desliga o agente, ele não responde a mensagens recebidas.
 
-### 1. Criar Edge Function temporária `get-service-key`
-- Função simples que lê `Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')` e retorna o valor
-- Após copiar a chave, a função será removida por segurança
+**Mas existe um segundo motor independente:** a edge function `smart-followup`, disparada por cron diariamente (10:00 GMT-3), que analisa conversas paradas há 12h+ e envia follow-ups proativos via Gemini. Ela **não verifica** `is_active` nem `auto_response_enabled` antes de enviar — busca diretamente `nina_settings` apenas para pegar `company_name`, `sdr_name` e `timezone`, e segue enviando.
 
-### 2. Corrigir erros de build no `nina-orchestrator`
-O último diff introduziu 3 erros:
-- **Linha ~456**: `conversation.id` — a variável `conversation` não tem `.id` no escopo atual (deveria usar a conversa correta do contexto)
-- **Linha ~466**: `systemPrompt` não está definido — o código removeu a declaração mas ainda referencia a variável
-- **Linha ~475**: Mesmo problema — `systemPrompt` passado para `processQueueItem` sem estar declarado
+É por isso que mesmo com o agente "desligado" você viu mensagens saindo sozinhas.
 
-**Correção**: Restaurar a declaração de `systemPrompt` antes do bloco adicionado e corrigir a referência de `conversation`
+## Correção
 
-### 3. Corrigir erros de build no `ai-assistant`
-- 4 ocorrências de `catch (e)` onde `e` é `unknown` — adicionar type assertion `(e as Error).message`
+### 1. `supabase/functions/smart-followup/index.ts`
 
-### 4. Corrigir outros erros menores
-- `backfill-embeddings`: `Supabase.ai.Session` não existe + `error` unknown
-- `evolution-webhook`: `reactionMessage` property  
-- `generate-embeddings`: mesmos problemas do backfill
-- `import-inventory`: `error` unknown
-- `run-automations`: `error`/`err` unknown
+Adicionar checagem global no início (antes de buscar candidatos):
 
-### Arquivos a editar
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/get-service-key/index.ts` | Criar (temporário) |
-| `supabase/functions/nina-orchestrator/index.ts` | Restaurar `systemPrompt` + corrigir `conversation` ref |
-| `supabase/functions/ai-assistant/index.ts` | Type assertions em catch blocks |
-| `supabase/functions/backfill-embeddings/index.ts` | Fix Supabase.ai + error typing |
-| `supabase/functions/evolution-webhook/index.ts` | Fix reactionMessage property |
-| `supabase/functions/generate-embeddings/index.ts` | Fix Supabase.ai + error typing |
-| `supabase/functions/import-inventory/index.ts` | Fix error typing |
-| `supabase/functions/run-automations/index.ts` | Fix error typing |
+- Selecionar também `is_active` e `auto_response_enabled` de `nina_settings`.
+- Se `is_active = false` **OU** `auto_response_enabled = false` → logar `⛔ Agent disabled — skipping follow-up run` e retornar `{ status: 'skipped', reason: 'agent_disabled' }` sem processar nada.
 
+### 2. (Defensivo) Respeitar horário ativo
+
+Opcional na mesma rodada: se `nina_settings.active_hours_start/end` estiver definido e o horário atual (no `timezone` configurado) estiver fora da janela, também pular. Isso alinha o follow-up à mesma regra do orquestrador descrita em `mem://features/agent-toggle-enforcement`.
+
+### 3. Atualizar memória
+
+Atualizar `mem://features/autonomous-followup-engine` para registrar: "Respeita `is_active` e `auto_response_enabled` antes de qualquer envio."
+
+## Fora de escopo
+
+- Não mexer no orquestrador (já está correto).
+- Não tocar em `run-automations`, `broadcast-processor` (broadcasts são intencionalmente independentes do toggle do agente — são campanhas manuais).
+- Sem mudanças de UI.
+
+## Como validar
+
+Após o deploy, com o agente desligado, invocar manualmente o `smart-followup` e confirmar nos logs: `⛔ Agent disabled — skipping follow-up run` e zero mensagens enfileiradas.
