@@ -52,12 +52,23 @@ serve(async (req) => {
   try {
     console.log('[SmartFollowUp] 🧠 Starting smart follow-up analysis...');
 
-    // 1. Get nina_settings for company context
+    // 1. Get nina_settings for company context + agent toggles
     const { data: settings } = await supabase
       .from('nina_settings')
-      .select('company_name, sdr_name, timezone')
+      .select('company_name, sdr_name, timezone, is_active, auto_response_enabled')
       .limit(1)
       .maybeSingle();
+
+    // Respect agent toggle — if disabled, skip the entire run
+    if (settings && (settings.is_active === false || settings.auto_response_enabled === false)) {
+      console.log('[SmartFollowUp] ⛔ Agent disabled (is_active or auto_response_enabled = false) — skipping follow-up run');
+      return new Response(JSON.stringify({
+        status: 'skipped',
+        reason: 'agent_disabled',
+        is_active: settings.is_active,
+        auto_response_enabled: settings.auto_response_enabled,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     const companyName = settings?.company_name || 'a empresa';
     const sdrName = settings?.sdr_name || 'João';
