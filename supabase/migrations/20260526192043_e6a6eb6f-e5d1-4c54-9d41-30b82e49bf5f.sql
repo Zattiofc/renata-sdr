@@ -1,0 +1,1 @@
+ALTER TABLE public.nina_settings DROP COLUMN IF EXISTS sales_script_addon;

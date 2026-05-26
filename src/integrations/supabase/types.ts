@@ -1622,7 +1622,6 @@ export type Database = {
           response_delay_max: number
           response_delay_min: number
           route_all_to_receiver_enabled: boolean
-          sales_script_addon: string | null
           sdr_name: string | null
           system_prompt_override: string | null
           test_phone_numbers: Json | null
@@ -1670,7 +1669,6 @@ export type Database = {
           response_delay_max?: number
           response_delay_min?: number
           route_all_to_receiver_enabled?: boolean
-          sales_script_addon?: string | null
           sdr_name?: string | null
           system_prompt_override?: string | null
           test_phone_numbers?: Json | null
@@ -1718,7 +1716,6 @@ export type Database = {
           response_delay_max?: number
           response_delay_min?: number
           route_all_to_receiver_enabled?: boolean
-          sales_script_addon?: string | null
           sdr_name?: string | null
           system_prompt_override?: string | null
           test_phone_numbers?: Json | null
