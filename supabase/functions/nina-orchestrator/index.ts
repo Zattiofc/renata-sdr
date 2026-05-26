@@ -3275,10 +3275,11 @@ REGRA DE EXTRAÇÃO DE PERFIL:
 </persistent_memory_directive>`;
 
   if (contact) {
+    const rawName = (contact.call_name || contact.name || '').trim();
+    const firstName = rawName.split(/\s+/)[0] || '';
     contextInfo += `\n\n<contexto_cliente>`;
-    if (contact.name) contextInfo += `\n- Nome completo: ${contact.name}`;
-    if (contact.call_name) {
-      contextInfo += `\n- COMO CHAMAR: ${contact.call_name} (use APENAS este nome)`;
+    if (firstName) {
+      contextInfo += `\n- COMO CHAMAR: ${firstName} (use APENAS o primeiro nome, NUNCA nome completo ou sobrenome)`;
     } else {
       contextInfo += `\n- ⚠️ O cliente AINDA NÃO informou como prefere ser chamado. Pergunte na primeira oportunidade e use a ferramenta set_call_name para salvar.`;
     }
