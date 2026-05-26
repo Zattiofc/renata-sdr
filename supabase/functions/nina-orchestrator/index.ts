@@ -2534,14 +2534,14 @@ Quando o cliente confirmar um pedido, use reserve_inventory para dar saída no e
 
   // ===== SANITIZE + BUSINESS GUARDRAILS =====
   aiContent = sanitizeResponseForClient(aiContent);
-  aiContent = enforcePixGuardrail(aiContent, finalPrompt);
+  aiContent = enforceFirstNameOnly(aiContent, conversation?.contact);
 
   const latestAssistantMessage = getLatestAssistantMessage(cleanMessages, message?.id);
   if (isRepeatedAssistantReply(aiContent, latestAssistantMessage?.content)) {
     console.warn('[Nina] Repeated assistant reply detected, rebuilding fallback');
     aiContent = buildDeterministicContextFallback(message?.content, conversation?.contact, cleanMessages, message?.id);
     aiContent = sanitizeResponseForClient(aiContent);
-    aiContent = enforcePixGuardrail(aiContent, finalPrompt);
+    aiContent = enforceFirstNameOnly(aiContent, conversation?.contact);
   }
 
   console.log('[Nina] Final response length:', aiContent.length);
